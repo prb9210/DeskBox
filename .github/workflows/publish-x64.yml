@@ -13,6 +13,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # The fork runs on a newer SDK patch than the committed lock files, and
+      # the publish script refuses to run on a dirty tree. Refresh the locks and
+      # commit them locally (no push) so the tree is clean before publishing.
+      - name: Refresh NuGet locks
+        shell: pwsh
+        run: |
+          dotnet restore .\DeskBox.sln --force-evaluate -p:Platform=x64 -p:RuntimeIdentifier=win-x64
+          git config user.email "prb9210@users.noreply.github.com"
+          git config user.name "prb9210"
+          git add -A
+          git diff --cached --quiet; if ($LASTEXITCODE -ne 0) { git commit -m "ci: refresh lock files for this SDK" }
+          git status --porcelain
       - name: Publish Native AOT retail
         shell: pwsh
         run: ./scripts/publish-aot-retail.ps1 -Platform x64
