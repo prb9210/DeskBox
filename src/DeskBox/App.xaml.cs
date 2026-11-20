@@ -1853,6 +1853,9 @@ public partial class App : Application
             RunOptionalStartupStep("elevation-notice", ShowElevationNoticeIfNeeded);
 
             EnsureStartupPipeline().WriteSummary();
+            // The companion engine (AI classification, cloud sync, backups) is
+            // an optional payload; absent folder means a plain DeskBox build.
+            RunOptionalStartupStep("companion-host", () => CompanionProcessHost.StartIfPresent());
             Log("OnLaunched completed successfully");
 #if DEBUG
             if (Environment.GetEnvironmentVariable("DESKBOX_DEV_DATA_ROOT") is { } probeRoot &&
