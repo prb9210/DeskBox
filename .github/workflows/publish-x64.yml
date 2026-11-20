@@ -20,6 +20,8 @@ jobs:
         shell: pwsh
         run: |
           dotnet restore .\DeskBox.sln --force-evaluate -p:Platform=x64 -p:RuntimeIdentifier=win-x64
+          dotnet restore .\src\DeskBox\DeskBox.csproj --force-evaluate -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:PublishAot=true -p:DeskBoxRustNative=true -p:DeskBoxRustCrtLinkage=Static -p:JsonSerializerIsReflectionEnabledByDefault=false -p:IlcUseEnvironmentalTools=true -p:SelfContained=true -p:WindowsAppSDKSelfContained=true
+          dotnet restore .\src\DeskBox.Updater\DeskBox.Updater.csproj --force-evaluate -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:PublishAot=true -p:DeskBoxRustNative=true -p:DeskBoxRustCrtLinkage=Static -p:JsonSerializerIsReflectionEnabledByDefault=false -p:IlcUseEnvironmentalTools=true -p:SelfContained=true -p:WindowsAppSDKSelfContained=true
           git config user.email "prb9210@users.noreply.github.com"
           git config user.name "prb9210"
           git add -A
