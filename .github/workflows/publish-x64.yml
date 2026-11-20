@@ -1,0 +1,28 @@
+name: Publish x64 (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish Native AOT retail
+        shell: pwsh
+        run: ./scripts/publish-aot-retail.ps1 -Platform x64
+      - name: Upload publish folder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskbox-x64-publish
+          path: |
+            .artifacts/aot-retail/win-x64/publish/**
+            .artifacts/aot-retail/win-x64/publish.log
+            .artifacts/aot-retail/win-x64/summary.json
+          if-no-files-found: warn
