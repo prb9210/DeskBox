@@ -102,13 +102,65 @@ public partial class App
             created++;
         }
 
+        int removed = await RemoveStaleDesktopWidgetsAsync(manager);
+
         // Only mark done once at least one mapping exists, otherwise a missing
         // library would permanently disable the bootstrap.
         if (created > 0 || HasAnyCompanionWidget(library))
         {
             File.WriteAllText(markerPath, DateTime.Now.ToString("s") + " created=" + created);
-            Log($"[Companion] mapped {created} library folder(s) as widgets");
+            Log($"[Companion] mapped {created} library folder(s) as widgets, removed {removed} stale desktop widget(s)");
         }
+    }
+
+    /// <summary>
+    /// Drops file widgets that pointed at desktop folders the organizer already
+    /// moved into the library. Widget-only removal: the folder is never touched.
+    /// </summary>
+    private async Task<int> RemoveStaleDesktopWidgetsAsync(WidgetManager manager)
+    {
+        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory).TrimEnd('\\');
+        if (string.IsNullOrWhiteSpace(desktop))
+        {
+            return 0;
+        }
+
+        var stale = new List<string>();
+        foreach (WidgetConfig widget in SettingsService.Settings.Widgets)
+        {
+            string? mapped = widget.MappedFolderPath;
+            if (string.IsNullOrWhiteSpace(mapped))
+            {
+                continue;
+            }
+
+            string path = mapped!.TrimEnd('\\');
+            if (!path.StartsWith(desktop + "\\", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                stale.Add(widget.Id);
+            }
+        }
+
+        int removed = 0;
+        foreach (string widgetId in stale)
+        {
+            try
+            {
+                await manager.RemoveWidgetAsync(widgetId);
+                removed++;
+            }
+            catch (Exception ex)
+            {
+                Log($"[Companion] could not remove stale widget '{widgetId}': {ex.Message}");
+            }
+        }
+
+        return removed;
     }
 
     private bool HasWidgetForPath(string folderPath)
