@@ -46,6 +46,7 @@ public sealed partial class WidgetDrawerWindow : Window
     private bool _expanded;
     private bool _pointerDown;
     private bool _collapseHandledPress;
+    private double _layoutDiameterDip = ClosedSize;
     private bool _dragging;
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
@@ -217,8 +218,12 @@ public sealed partial class WidgetDrawerWindow : Window
     /// <summary>Places the ball at the centre of the real client area.</summary>
     private void Relayout()
     {
-        double width = RootGrid.ActualWidth;
-        double height = RootGrid.ActualHeight;
+        // Never read ActualWidth here: SetExpanded() resizes the window and then
+        // lays out immediately, before the framework has measured the new size.
+        // Reading the stale size collapsed the ring to the ball's radius, which
+        // is why expanding looked like "nothing happens".
+        double width = _layoutDiameterDip;
+        double height = _layoutDiameterDip;
         if (width <= 0 || height <= 0)
         {
             width = ClosedSize;
@@ -339,6 +344,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
         _expanded = expanded;
         double diameter = expanded ? ExpandedDiameterDip() : ClosedSize;
+        _layoutDiameterDip = diameter;
 
         // The window grows around the ball centre, so the bead never moves on
         // screen; the ring is then built from the size the window really got.
