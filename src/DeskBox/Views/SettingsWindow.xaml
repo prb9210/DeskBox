@@ -245,7 +245,7 @@ Text="DeskBox" />
                 </NavigationViewItem>
                 <NavigationViewItem
                     x:Name="CompanionNavItem"
-                    Tag="Companion"
+                    Tag="CompanionSettings"
                     Content="桌面管家">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7B8;" />
@@ -2476,7 +2476,7 @@ Text="DeskBox" />
                     <DataTemplate x:Key="GlanceSettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">
                         <sections:GlanceWidgetSettingsSection x:Name="GlanceSettingsSection" Visibility="Collapsed" />
                     </DataTemplate>
-                    <DataTemplate x:Key="CompanionSectionTemplate" x:DataType="viewModels:SettingsViewModel">
+                    <DataTemplate x:Key="CompanionSettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">
                         <vw:CompanionSettingsSection x:Name="CompanionSettingsSection" Visibility="Collapsed" />
                     </DataTemplate>
                     <DataTemplate x:Key="SearchSettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">

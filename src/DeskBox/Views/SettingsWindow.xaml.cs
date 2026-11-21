@@ -100,7 +100,7 @@ public sealed partial class SettingsWindow : Window
             ["CapsuleMode"] = new("CapsuleMode", "Settings.Section.CapsuleMode", null, "CapsuleMode"),
             ["WidgetGroups"] = new("WidgetGroups", "Settings.Section.WidgetGroups", "Appearance", "Appearance"),
             ["AppearanceDetail"] = new("AppearanceDetail", "Settings.Appearance.DetailTitle", null, "AppearanceDetail"),
-            ["Companion"] = new("Companion", "桌面管家", null, "Companion"),
+            ["CompanionSettings"] = new("CompanionSettings", "桌面管家", null, "CompanionSettings"),
             ["FeatureWidgets"] = new("FeatureWidgets", "Settings.Section.FeatureWidgets", null, "FeatureWidgets"),
             ["Interaction"] = new("Interaction", "Settings.Section.Interaction", null, "Interaction"),
             ["Displays"] = new("Displays", "Settings.Displays.Title", "General", "General"),
