@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using DeskBox.Helpers;
+using DeskBox.Platform;
 using DeskBox.Services;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -112,15 +112,15 @@ public sealed partial class WidgetDrawerWindow : Window
             IntPtr hWnd = WindowNative.GetWindowHandle(this);
             double scale = RootGrid.XamlRoot?.RasterizationScale ?? 1.0;
             int diameter = Math.Max(16, (int)Math.Round(WindowSize * scale));
-            IntPtr region = CreateEllipticRgn(0, 0, diameter + 1, diameter + 1);
+            IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter + 1, diameter + 1);
             if (region == IntPtr.Zero)
             {
                 return;
             }
 
-            if (SetWindowRgn(hWnd, region, true) == 0)
+            if (Win32Helper.SetWindowRgn(hWnd, region, true) == 0)
             {
-                DeleteObject(region);
+                Win32Helper.DeleteObject(region);
             }
         }
         catch (Exception ex)
@@ -498,14 +498,4 @@ public sealed partial class WidgetDrawerWindow : Window
         flyout.ShowAt(Ball, new FlyoutShowOptions { Position = e.GetPosition(Ball) });
         e.Handled = true;
     }
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
-
-    [DllImport("gdi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DeleteObject(IntPtr handle);
 }
