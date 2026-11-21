@@ -1438,6 +1438,75 @@ public sealed partial class WidgetManager
         return true;
     }
 
+    /// <summary>Widgets the drawer can park one by one, in settings order.</summary>
+    public IReadOnlyList<(string Id, string Name)> DrawerWidgetChoices()
+    {
+        var choices = new List<(string, string)>();
+        foreach (WidgetConfig widget in _settingsService.Settings.Widgets)
+        {
+            if (IsSessionCandidate(widget))
+            {
+                choices.Add((widget.Id, widget.Name));
+            }
+        }
+
+        return choices;
+    }
+
+    /// <summary>
+    /// Shows or hides a single widget through the same serialized gate the tray
+    /// batch uses, so a per-widget action cannot interleave with a raise/hide
+    /// pass. Hiding is session-scoped (persistVisibility: false): the drawer
+    /// keeps its own parked list, and settings stay untouched.
+    /// </summary>
+    public Task SetWidgetVisibleAsync(string widgetId, bool visible)
+    {
+        return RunOnUiThreadAsync(() => ExecuteTrayVisibilityOperationAsync(
+            $"set-widget:{widgetId}:{visible}",
+            () => SetWidgetVisibleCoreAsync(widgetId, visible)));
+    }
+
+    private async Task SetWidgetVisibleCoreAsync(string widgetId, bool visible)
+    {
+        IDesktopWidgetWindow? window = GetLoadedDesktopWindows()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Config.Id, widgetId, StringComparison.Ordinal));
+
+        if (visible)
+        {
+            if (window is { Visible: true })
+            {
+                return;
+            }
+
+            await ShowWidgetAsync(widgetId);
+            return;
+        }
+
+        if (window is null || !window.Visible)
+        {
+            return;
+        }
+
+        try
+        {
+            if (window.PrepareTrayHideAnimation(persistVisibility: false))
+            {
+                window.PlayPreparedTrayHideAnimation();
+            }
+            else
+            {
+                window.HideWindow();
+            }
+
+            App.LogVerbose($"[Drawer] widget parked id={widgetId}");
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] failed to park widget {widgetId}: {ex}");
+        }
+    }
+
     /// <summary>
     /// Show or hide all currently managed widgets.
     /// </summary>

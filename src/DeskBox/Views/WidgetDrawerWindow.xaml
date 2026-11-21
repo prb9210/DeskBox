@@ -4,29 +4,50 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid x:Name="RootGrid" Background="Transparent">
-        <Button
-            x:Name="DrawerButton"
-            Padding="0"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Stretch"
-            AutomationProperties.Name="格子抽屉：点一下收起或呼出全部格子"
-            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+    <Grid
+        x:Name="RootGrid"
+        Background="Transparent"
+        DoubleTapped="RootGrid_DoubleTapped"
+        PointerEntered="RootGrid_PointerEntered"
+        PointerExited="RootGrid_PointerExited"
+        PointerMoved="RootGrid_PointerMoved"
+        PointerPressed="RootGrid_PointerPressed"
+        PointerReleased="RootGrid_PointerReleased"
+        RightTapped="RootGrid_RightTapped">
+
+        <Border
+            x:Name="Ball"
+            Width="56"
+            Height="56"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
             BorderThickness="1"
-            Click="DrawerButton_Click"
-            CornerRadius="18"
-            RightTapped="DrawerButton_RightTapped">
-            <StackPanel
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Spacing="2">
-                <FontIcon FontSize="20" Glyph="&#xE700;" />
+            CornerRadius="28"
+            Opacity="0.45"
+            RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform>
+                <ScaleTransform x:Name="BallScale" ScaleX="1" ScaleY="1" />
+            </Border.RenderTransform>
+            <Grid>
                 <TextBlock
+                    x:Name="BallGlyph"
                     HorizontalAlignment="Center"
-                    FontSize="11"
-                    Text="格子" />
-            </StackPanel>
-        </Button>
+                    VerticalAlignment="Center"
+                    FontSize="20"
+                    FontWeight="SemiBold"
+                    Foreground="White"
+                    Text="格" />
+                <Border
+                    x:Name="StateDot"
+                    Width="10"
+                    Height="10"
+                    Margin="0,0,7,7"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Background="White"
+                    CornerRadius="5"
+                    Visibility="Collapsed" />
+            </Grid>
+        </Border>
     </Grid>
 </Window>

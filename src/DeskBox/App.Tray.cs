@@ -90,6 +90,21 @@ public partial class App
             showAllWidgetsItem,
             () => RunTrayMenuActionAsync(contextMenu, () => SetAllWidgetsVisibleAsync(true)));
 
+        // Containers, not commands: their items are rebuilt from the live widget
+        // list every time the menu refreshes, so a newly mapped folder shows up.
+        var parkWidgetItem = new MenuFlyoutSubItem
+        {
+            Text = "收起某个格子",
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE7C4" }
+        };
+        var raiseWidgetItem = new MenuFlyoutSubItem
+        {
+            Text = "呼出某个格子",
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE7C5" }
+        };
+
         var mapFolderItem = new MenuFlyoutItem
         {
             Text = localization.T("Common.NewFolderMapping"),
@@ -159,6 +174,8 @@ public partial class App
         contextMenu.Items.Add(drawerItem);
         contextMenu.Items.Add(showAllWidgetsItem);
         contextMenu.Items.Add(hideAllWidgetsItem);
+        contextMenu.Items.Add(parkWidgetItem);
+        contextMenu.Items.Add(raiseWidgetItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
         foreach (var descriptor in new WidgetContentFactory(LocalizationService).GetCreateEntryDescriptors())
         {
@@ -177,6 +194,9 @@ public partial class App
         contextMenu.Items.Add(new MenuFlyoutSeparator());
         contextMenu.Items.Add(exitItem);
 
+        _trayParkWidgetItem = parkWidgetItem;
+        _trayRaiseWidgetItem = raiseWidgetItem;
+        RefreshDrawerWidgetSubMenus();
         _trayOrganizeDesktopItem = organizeDesktopItem;
         _trayMapFolderItem = mapFolderItem;
         _trayAddFeatureWidgetItem = addFeatureWidgetItem;
@@ -1129,8 +1149,41 @@ public partial class App
         RefreshTrayToolTipText();
     }
 
+    /// <summary>
+    /// Rebuilds the drawer submenus from the live widget list. Items are wired
+    /// with plain Click handlers (not the tray interaction gate) because these
+    /// flyouts only exist in the XAML menu, never in the native fallback.
+    /// </summary>
+    private void RefreshDrawerWidgetSubMenus()
+    {
+        if (_trayParkWidgetItem is null || _trayRaiseWidgetItem is null)
+        {
+            return;
+        }
+
+        _trayParkWidgetItem.Items.Clear();
+        _trayRaiseWidgetItem.Items.Clear();
+
+        foreach ((string id, string name) in DrawerWidgetChoices())
+        {
+            string widgetId = id;
+
+            var park = new MenuFlyoutItem { Text = name };
+            park.Click += async (_, _) => await CollapseWidgetAsync(widgetId);
+            _trayParkWidgetItem.Items.Add(park);
+
+            var raise = new MenuFlyoutItem { Text = name };
+            raise.Click += async (_, _) => await ExpandWidgetAsync(widgetId);
+            _trayRaiseWidgetItem.Items.Add(raise);
+        }
+
+        _trayParkWidgetItem.IsEnabled = _trayParkWidgetItem.Items.Count > 0;
+        _trayRaiseWidgetItem.IsEnabled = _trayRaiseWidgetItem.Items.Count > 0;
+    }
+
     private void RefreshTrayMenuText()
     {
+        RefreshDrawerWidgetSubMenus();
         if (_trayOrganizeDesktopItem is not null)
         {
             _trayOrganizeDesktopItem.Text = LocalizationService.T(

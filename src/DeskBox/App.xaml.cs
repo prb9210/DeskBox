@@ -129,6 +129,8 @@ public partial class App : Application
     private MenuFlyout? _trayContextMenu;
     private bool _traySecondWindowSyncLogged;
     private MenuFlyoutItem? _trayOrganizeDesktopItem;
+    private MenuFlyoutSubItem? _trayParkWidgetItem;
+    private MenuFlyoutSubItem? _trayRaiseWidgetItem;
     private MenuFlyoutItem? _trayMapFolderItem;
     private MenuFlyoutItem? _trayAddFeatureWidgetItem;
     private readonly Dictionary<WidgetKind, MenuFlyoutItem> _trayCreateWidgetItems = [];
