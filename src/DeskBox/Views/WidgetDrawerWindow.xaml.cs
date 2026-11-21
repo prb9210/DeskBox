@@ -410,8 +410,8 @@ public sealed partial class WidgetDrawerWindow : Window
                 Tag = id
             };
 
-            Paint hoverFill = BuildSectorBrush(mid, true, hovered: true);
-            Paint restingFill = sector.Fill;
+            Brush hoverFill = BuildSectorBrush(mid, true, hovered: true);
+            Brush restingFill = sector.Fill;
             sector.PointerEntered += (_, _) =>
             {
                 sector.Fill = hoverFill;
