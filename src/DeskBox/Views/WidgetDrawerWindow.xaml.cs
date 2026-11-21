@@ -12,7 +12,6 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Shapes;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
@@ -21,13 +20,15 @@ using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
 namespace DeskBox.Views;
 
 /// <summary>
-/// The desktop drawer: a glass bead that fans the widgets out around itself.
+/// The desktop drawer: a glass bead that opens a full-circle radial menu.
 ///
-/// Geometry mirrors the reference implementation (ClassFlow / MathBoard): inner
-/// radius 60, outer 206, sectors on a 180° arc pointing from the ball toward the
-/// middle of the screen, 2.5° gaps, labels at mid radius. Closed state is the
-/// same scene translated so only the 64 DIP ball is on screen; that keeps one
-/// visual tree for both states and stops the ball from jumping when it opens.
+/// Closed, the window is 64 DIP and only the ball shows. Open, the sectors form
+/// a complete ring around the ball (the "one circle" layout), so no direction
+/// has to be guessed and nothing is hidden behind a screen edge: the outer
+/// radius shrinks to whatever fits between the ball and the nearest edge.
+///
+/// The scene canvas is a fixed 460 DIP with the ball pinned to its centre; the
+/// window size and the translate offset are the only things that change.
 /// </summary>
 public sealed partial class WidgetDrawerWindow : Window
 {
@@ -36,9 +37,10 @@ public sealed partial class WidgetDrawerWindow : Window
     private const double BallDiameter = 56;
     private const double ClosedSize = 64;
 
-    private const double FanInner = 44;
-    private const double FanOuter = 210;
-    private const double FanGapDegrees = 2.5;
+    /// <summary>Radii when the ball has room; shrunk dynamically near edges.</summary>
+    private const double MaxFanOuter = 208;
+    private const double MinFanOuter = 118;
+    private const double FanGapDegrees = 2.2;
 
     private const int ScreenMargin = 18;
     private const int EdgeSnapDistance = 110;
@@ -51,6 +53,8 @@ public sealed partial class WidgetDrawerWindow : Window
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
     private double _scale = 1.0;
+    private double _fanInner = 44;
+    private double _fanOuter = MaxFanOuter;
 
     public WidgetDrawerWindow(WidgetDrawerSettings settings)
     {
@@ -60,6 +64,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
         ApplyColor();
         LayoutScene();
+        ApplyChrome();
 
         var escape = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         escape.Invoked += (_, args) =>
@@ -71,7 +76,7 @@ public sealed partial class WidgetDrawerWindow : Window
             }
         };
         RootGrid.KeyboardAccelerators.Add(escape);
-        ApplyChrome();
+
         RootGrid.Loaded += (_, _) => UpdateStateDot();
     }
 
@@ -112,9 +117,8 @@ public sealed partial class WidgetDrawerWindow : Window
 
             AppBranding.ApplyWindowIcon(appWindow);
 
-            // Windows 11 draws a 1px outline (and rounds corners) around any
-            // top-level window, which showed up as a grey rectangle floating on
-            // the desktop. This window is a shape, not a window: kill both.
+            // Windows 11 outlines and rounds every top-level window. This window
+            // is a shape, so both have to go or the desktop shows a grey box.
             IntPtr hWnd = WindowNative.GetWindowHandle(this);
             int noBorder = -2; // DWMWA_COLOR_NONE
             Win32Helper.TrySetDwmWindowAttribute(hWnd, Win32Helper.DWMWA_BORDER_COLOR, ref noBorder);
@@ -126,8 +130,6 @@ public sealed partial class WidgetDrawerWindow : Window
             App.Log($"[Drawer] chrome setup failed: {ex.Message}");
         }
 
-        // Per-pixel transparency: without it every unpainted pixel of the scene
-        // is black, which is exactly the "black shape with a frame" artifact.
         try
         {
             SystemBackdrop = new WinUIEx.TransparentTintBackdrop(Colors.Transparent);
@@ -158,8 +160,6 @@ public sealed partial class WidgetDrawerWindow : Window
         }
     }
 
-    /// <summary>Places the ball at the scene centre and translates the scene for
-    /// the current state.</summary>
     private void LayoutScene()
     {
         Canvas.SetLeft(Ball, SceneCenter - (BallDiameter / 2));
@@ -167,16 +167,17 @@ public sealed partial class WidgetDrawerWindow : Window
         Canvas.SetLeft(BallRing, SceneCenter - 31);
         Canvas.SetTop(BallRing, SceneCenter - 31);
 
-        // No translation: the scene is always centred on the ball, and the
-        // window size alone decides how much of it is on screen. Translating it
-        // was what pushed the ball off-centre.
+        // The ball is always at the canvas centre; the scene is never shifted.
         SceneShift.X = 0;
         SceneShift.Y = 0;
     }
 
-    private SizeInt32 WindowSizePixels() => new(
-        (int)Math.Round((_expanded ? SceneSize : ClosedSize) * _scale),
-        (int)Math.Round((_expanded ? SceneSize : ClosedSize) * _scale));
+    private SizeInt32 WindowSizePixels()
+    {
+        double size = _expanded ? (_fanOuter + 12) * 2 : ClosedSize;
+        int pixels = (int)Math.Round(size * _scale);
+        return new SizeInt32(pixels, pixels);
+    }
 
     public void ShowAtSavedSpot()
     {
@@ -214,7 +215,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
 
-    /// <summary>Grows/shrinks the window around the ball centre.</summary>
+    /// <summary>Grows or shrinks the window around the ball centre.</summary>
     private void SetExpanded(bool expanded)
     {
         if (_expanded == expanded)
@@ -226,6 +227,11 @@ public sealed partial class WidgetDrawerWindow : Window
         PointInt32 current = appWindow.Position;
         int ballCenterX = current.X + (int)Math.Round((ClosedSize / 2) * _scale);
         int ballCenterY = current.Y + (int)Math.Round((ClosedSize / 2) * _scale);
+
+        if (expanded)
+        {
+            ComputeFanRadius(ballCenterX, ballCenterY);
+        }
 
         _expanded = expanded;
         LayoutScene();
@@ -252,6 +258,32 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         AnimateFan(expanded ? 1 : 0);
+    }
+
+    /// <summary>Keeps the whole ring on screen: the outer radius is capped by the
+    /// distance from the ball to the nearest work-area edge.</summary>
+    private void ComputeFanRadius(int ballCenterX, int ballCenterY)
+    {
+        try
+        {
+            AppWindow appWindow = GetAppWindow();
+            RectInt32 work = DisplayArea
+                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
+                .WorkArea;
+
+            double nearest = Math.Min(
+                Math.Min(ballCenterX - work.X, work.X + work.Width - ballCenterX),
+                Math.Min(ballCenterY - work.Y, work.Y + work.Height - ballCenterY));
+            double available = (nearest / _scale) - 10;
+
+            _fanOuter = Math.Clamp(available, MinFanOuter, MaxFanOuter);
+            _fanInner = Math.Max(38, Math.Round(_fanOuter * 0.22));
+        }
+        catch (Exception)
+        {
+            _fanOuter = MaxFanOuter;
+            _fanInner = 44;
+        }
     }
 
     // ------------------------------------------------------------- appearance
@@ -343,35 +375,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
     // -------------------------------------------------------------------- fan
 
-    /// <summary>Direction the fan opens: from the ball toward the screen centre,
-    /// snapped to 45° so it always looks deliberate.</summary>
-    private double FanDirection()
-    {
-        try
-        {
-            AppWindow appWindow = GetAppWindow();
-            RectInt32 work = DisplayArea
-                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
-                .WorkArea;
-            PointInt32 position = appWindow.Position;
-            int half = (int)Math.Round((SceneSize / 2) * _scale);
-
-            double dx = (work.X + (work.Width / 2.0)) - (position.X + half);
-            double dy = (work.Y + (work.Height / 2.0)) - (position.Y + half);
-            if (Math.Abs(dx) < 1 && Math.Abs(dy) < 1)
-            {
-                return -90;
-            }
-
-            double degrees = Math.Atan2(dy, dx) * 180 / Math.PI;
-            return Math.Round(degrees / 45.0) * 45.0;
-        }
-        catch (Exception)
-        {
-            return -90;
-        }
-    }
-
+    /// <summary>Full 360° ring: sectors are equal slices starting at the top.</summary>
     private void BuildFan()
     {
         FanCanvas.Children.Clear();
@@ -386,29 +390,28 @@ public sealed partial class WidgetDrawerWindow : Window
             return;
         }
 
-        double direction = FanDirection();
         int count = states.Count;
-        double step = 180.0 / count;
+        double step = 360.0 / count;
         double span = Math.Max(10, step - FanGapDegrees);
 
         for (int i = 0; i < count; i++)
         {
             (string id, string name, bool visible) = states[i];
-            double mid = direction - 90 + (step * (i + 0.5));
+            double mid = -90 + (step * (i + 0.5));
             double start = mid - (span / 2);
             double end = mid + (span / 2);
 
             var sector = new XamlPath
             {
                 Data = BuildSector(start, end),
-                Fill = BuildSectorBrush(direction, visible),
-                Stroke = new SolidColorBrush(Color.FromArgb(56, 255, 255, 255)),
+                Fill = BuildSectorBrush(mid, visible),
+                Stroke = new SolidColorBrush(Color.FromArgb(48, 255, 255, 255)),
                 StrokeThickness = 1,
                 Tag = id
             };
 
-            var restingFill = sector.Fill;
-            var hoverFill = BuildSectorBrush(direction, true, hovered: true);
+            Paint hoverFill = BuildSectorBrush(mid, true, hovered: true);
+            Paint restingFill = sector.Fill;
             sector.PointerEntered += (_, _) =>
             {
                 sector.Fill = hoverFill;
@@ -418,7 +421,7 @@ public sealed partial class WidgetDrawerWindow : Window
             sector.PointerExited += (_, _) =>
             {
                 sector.Fill = restingFill;
-                sector.Stroke = new SolidColorBrush(Color.FromArgb(56, 255, 255, 255));
+                sector.Stroke = new SolidColorBrush(Color.FromArgb(48, 255, 255, 255));
                 sector.StrokeThickness = 1;
             };
 
@@ -433,40 +436,14 @@ public sealed partial class WidgetDrawerWindow : Window
             FanCanvas.Children.Add(sector);
             AddSectorLabel(mid, name, visible);
         }
-
-        // Outer rim highlight: the reference fan is closed by a single light arc,
-        // which is what stops it from looking like loose wedges.
-        var rim = new XamlPath
-        {
-            Data = BuildOuterArc(direction - 90, direction + 90 - FanGapDegrees),
-            Stroke = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
-            StrokeThickness = 1.2,
-            IsHitTestVisible = false
-        };
-        FanCanvas.Children.Add(rim);
-    }
-
-    private static Geometry BuildOuterArc(double a0, double a1)
-    {
-        var figure = new PathFigure { StartPoint = PointAt(FanOuter, a0), IsClosed = false, IsFilled = false };
-        bool large = Math.Abs(a1 - a0) > 180;
-        figure.Segments.Add(new ArcSegment
-        {
-            Point = PointAt(FanOuter, a1),
-            Size = new Windows.Foundation.Size(FanOuter, FanOuter),
-            IsLargeArc = large,
-            SweepDirection = SweepDirection.Clockwise
-        });
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        return geometry;
     }
 
     private void AddSectorLabel(double degrees, string text, bool visible)
     {
-        double radius = (FanInner + FanOuter) / 2;
+        double radius = (_fanInner + _fanOuter) / 2;
         double rad = degrees * Math.PI / 180;
+        double x = SceneCenter + (radius * Math.Cos(rad));
+        double y = SceneCenter + (radius * Math.Sin(rad));
 
         var label = new TextBlock
         {
@@ -476,12 +453,12 @@ public sealed partial class WidgetDrawerWindow : Window
             Foreground = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)190, 255, 255, 255)),
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.NoWrap,
-            Width = 78,
+            Width = 76,
             IsHitTestVisible = false
         };
 
-        Canvas.SetLeft(label, SceneCenter + (radius * Math.Cos(rad)) - 39);
-        Canvas.SetTop(label, SceneCenter + (radius * Math.Sin(rad)) - 8);
+        Canvas.SetLeft(label, x - 38);
+        Canvas.SetTop(label, y - 8);
         FanCanvas.Children.Add(label);
 
         var dot = new Border
@@ -492,20 +469,18 @@ public sealed partial class WidgetDrawerWindow : Window
             Background = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)90, 255, 255, 255)),
             IsHitTestVisible = false
         };
-        Canvas.SetLeft(dot, SceneCenter + (radius * Math.Cos(rad)) - 3);
-        Canvas.SetTop(dot, SceneCenter + (radius * Math.Sin(rad)) + 10);
+        Canvas.SetLeft(dot, x - 3);
+        Canvas.SetTop(dot, y + 10);
         FanCanvas.Children.Add(dot);
     }
 
     private Brush BuildSectorBrush(double directionDegrees, bool visible, bool hovered = false)
     {
         DrawerColorPreset preset = ResolvePreset();
-        Color inner = Shade(ParseColor(preset.Start), hovered ? 1.05 : 0.72);
-        Color outer = Shade(ParseColor(preset.End), hovered ? 0.72 : 0.46);
-        byte alpha = hovered ? (byte)255 : visible ? (byte)248 : (byte)150;
+        Color inner = Shade(ParseColor(preset.Start), hovered ? 1.06 : 0.70);
+        Color outer = Shade(ParseColor(preset.End), hovered ? 0.74 : 0.44);
+        byte alpha = hovered ? (byte)255 : visible ? (byte)250 : (byte)150;
 
-        // Gradient runs along the fan direction: light at the inner edge, deep at
-        // the rim — the same read as the reference fan.
         double rad = directionDegrees * Math.PI / 180;
         double cx = Math.Cos(rad) / 2;
         double cy = Math.Sin(rad) / 2;
@@ -522,8 +497,6 @@ public sealed partial class WidgetDrawerWindow : Window
         };
     }
 
-    /// <summary>Darkens a colour toward the reference fan: sectors read as deep
-    /// glass, not as bright paint.</summary>
     private static Color Shade(Color color, double factor)
     {
         return Color.FromArgb(
@@ -533,12 +506,12 @@ public sealed partial class WidgetDrawerWindow : Window
             (byte)Math.Clamp(color.B * factor, 0, 255));
     }
 
-    private static Geometry BuildSector(double a0, double a1)
+    private Geometry BuildSector(double a0, double a1)
     {
-        Windows.Foundation.Point innerStart = PointAt(FanInner, a0);
-        Windows.Foundation.Point outerStart = PointAt(FanOuter, a0);
-        Windows.Foundation.Point outerEnd = PointAt(FanOuter, a1);
-        Windows.Foundation.Point innerEnd = PointAt(FanInner, a1);
+        Windows.Foundation.Point innerStart = PointAt(_fanInner, a0);
+        Windows.Foundation.Point outerStart = PointAt(_fanOuter, a0);
+        Windows.Foundation.Point outerEnd = PointAt(_fanOuter, a1);
+        Windows.Foundation.Point innerEnd = PointAt(_fanInner, a1);
 
         var figure = new PathFigure
         {
@@ -550,7 +523,7 @@ public sealed partial class WidgetDrawerWindow : Window
         figure.Segments.Add(new ArcSegment
         {
             Point = outerEnd,
-            Size = new Windows.Foundation.Size(FanOuter, FanOuter),
+            Size = new Windows.Foundation.Size(_fanOuter, _fanOuter),
             IsLargeArc = false,
             SweepDirection = SweepDirection.Clockwise
         });
@@ -558,7 +531,7 @@ public sealed partial class WidgetDrawerWindow : Window
         figure.Segments.Add(new ArcSegment
         {
             Point = innerStart,
-            Size = new Windows.Foundation.Size(FanInner, FanInner),
+            Size = new Windows.Foundation.Size(_fanInner, _fanInner),
             IsLargeArc = false,
             SweepDirection = SweepDirection.Clockwise
         });
@@ -615,8 +588,8 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        // A press while the fan is open means "close it": the fan canvas covers
-        // the whole scene, so anything reaching this handler is empty space.
+        // A press that reaches this handler while the ring is open is a press on
+        // empty space (sectors mark their own taps), so it closes the ring.
         if (_expanded)
         {
             SetExpanded(false);
