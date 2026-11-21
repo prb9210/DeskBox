@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:media="using:Microsoft.UI.Xaml.Media.Imaging"
     xmlns:controls="using:DeskBox.Controls"
+    xmlns:vw="using:DeskBox.Views"
     xmlns:sections="using:DeskBox.Views.SettingsSections"
     xmlns:viewModels="using:DeskBox.ViewModels"
     xmlns:fileStack="using:DeskBox.Features.FileStack"
@@ -2476,7 +2477,7 @@ Text="DeskBox" />
                         <sections:GlanceWidgetSettingsSection x:Name="GlanceSettingsSection" Visibility="Collapsed" />
                     </DataTemplate>
                     <DataTemplate x:Key="CompanionSectionTemplate" x:DataType="viewModels:SettingsViewModel">
-                        <sections:CompanionSettingsSection x:Name="CompanionSettingsSection" Visibility="Collapsed" />
+                        <vw:CompanionSettingsSection x:Name="CompanionSettingsSection" Visibility="Collapsed" />
                     </DataTemplate>
                     <DataTemplate x:Key="SearchSettingsSectionTemplate" x:DataType="viewModels:SettingsViewModel">
                         <sections:SearchSettingsSection x:Name="SearchSettingsSection" Visibility="Collapsed" />
