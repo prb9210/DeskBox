@@ -12,9 +12,9 @@ namespace DeskBox.Services;
 
 public sealed partial class AppUpdateService : IAppUpdateService
 {
-    public const string DefaultManifestUrl = "https://deskbox.fun/update/stable.json";
-    public const string DefaultGitHubLatestReleaseApiUrl = "https://api.github.com/repos/Tianyu199509/DeskBox/releases/latest";
-    public const string DefaultManualDownloadUrl = "https://deskbox.fun/download";
+    public const string DefaultManifestUrl = "https://github.com/prb9210/DeskBox/releases/latest/download/manifest.json";
+    public const string DefaultGitHubLatestReleaseApiUrl = "https://api.github.com/repos/prb9210/DeskBox/releases/latest";
+    public const string DefaultManualDownloadUrl = "https://github.com/prb9210/DeskBox/releases/latest";
 
     private readonly HttpClient _httpClient;
     private readonly string _manifestUrl;
@@ -756,7 +756,7 @@ public sealed partial class AppUpdateService : IAppUpdateService
         {
             Channel = "direct",
             Version = version.Trim(),
-            ReleaseNotesUrl = $"https://github.com/Tianyu199509/DeskBox/releases/tag/v{version.Trim()}",
+            ReleaseNotesUrl = $"https://github.com/prb9210/DeskBox/releases/tag/v{version.Trim()}",
         };
     }
 
@@ -786,7 +786,7 @@ public sealed partial class AppUpdateService : IAppUpdateService
         // which therefore must never be trusted as a manifest origin itself.
         return string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase) &&
             uri.AbsolutePath.StartsWith(
-                "/Tianyu199509/DeskBox/releases/download/",
+                "/prb9210/DeskBox/releases/download/",
                 StringComparison.OrdinalIgnoreCase);
     }
 
