@@ -1,6 +1,7 @@
 using System;
 using DeskBox.Helpers;
-using DeskBox.Platform;
+using DeskBox.Services;
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
