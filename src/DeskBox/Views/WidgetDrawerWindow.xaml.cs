@@ -51,7 +51,7 @@ public sealed partial class WidgetDrawerWindow : Window
         ApplyColor();
         ApplyChrome();
 
-        Loaded += (_, _) => UpdateStateDot();
+        RootGrid.Loaded += (_, _) => UpdateStateDot();
     }
 
     /// <summary>Hands the HWND to whoever needs to register a hotkey on it.</summary>
