@@ -100,6 +100,9 @@ public sealed partial class SettingsWindow
             case DisplaySettingsSection displaySettings:
                 displaySettings.Configure(_widgetActions, _appActions);
                 break;
+            case CompanionSettingsSection companionSettings:
+                companionSettings.OwnerHandle = _hWnd;
+                break;
             case DesktopOrganizationSettingsSection organizationSettings:
                 organizationSettings.Configure(_widgetActions, _appActions, _hWnd);
                 break;
