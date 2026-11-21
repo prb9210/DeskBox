@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using DeskBox.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
 
 namespace DeskBox.Views;
 
@@ -20,8 +21,15 @@ public sealed partial class CompanionSettingsSection : UserControl
 {
     private static readonly int[] IntervalChoices = { 15, 30, 60, 120, 240, 720 };
 
+    private readonly List<(string Id, string Dir)> _categories = new();
+
     private bool _statusBusy;
     private bool _settingsLoaded;
+    private bool _categoriesLoaded;
+
+    /// <summary>Owner window handle, set by the hosting window so the file /
+    /// folder pickers can be attached to it.</summary>
+    public IntPtr OwnerHandle { get; set; }
 
     public CompanionSettingsSection()
     {
@@ -34,6 +42,7 @@ public sealed partial class CompanionSettingsSection : UserControl
         Loaded += async (_, _) =>
         {
             await RefreshStatusAsync();
+            await LoadCategoriesAsync();
             await RefreshPlanAsync();
             await RefreshConflictsAsync();
             await RefreshPendingAsync();
@@ -169,6 +178,149 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
+    // ------------------------------------------------------------ categories
+
+    private async Task LoadCategoriesAsync()
+    {
+        if (_categoriesLoaded)
+        {
+            return;
+        }
+
+        JsonDocument? document = await CompanionClient.GetJsonAsync("/api/paths");
+        if (document is null)
+        {
+            return;
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement item in document.RootElement.EnumerateArray())
+                {
+                    string id = Str(item, "id");
+                    string dir = Str(item, "dir");
+                    if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(dir))
+                    {
+                        _categories.Add((id, dir));
+                    }
+                }
+            }
+        }
+
+        TargetCategoryBox.Items.Clear();
+        foreach ((string _, string dir) in _categories)
+        {
+            TargetCategoryBox.Items.Add(DisplayCategory(dir));
+        }
+
+        if (TargetCategoryBox.Items.Count > 0)
+        {
+            TargetCategoryBox.SelectedIndex = 0;
+        }
+
+        _categoriesLoaded = _categories.Count > 0;
+    }
+
+    private static string DisplayCategory(string dir) => dir.Replace("/", " → ");
+
+    private ComboBox BuildCategoryPicker(string? suggestedId)
+    {
+        var picker = new ComboBox { MinWidth = 190, FontSize = 12 };
+        foreach ((string _, string dir) in _categories)
+        {
+            picker.Items.Add(DisplayCategory(dir));
+        }
+
+        int index = 0;
+        if (!string.IsNullOrEmpty(suggestedId))
+        {
+            int found = _categories.FindIndex(c => c.Id == suggestedId);
+            if (found >= 0)
+            {
+                index = found;
+            }
+        }
+
+        if (picker.Items.Count > 0)
+        {
+            picker.SelectedIndex = index;
+        }
+
+        return picker;
+    }
+
+    private string? CategoryIdAt(ComboBox picker) =>
+        picker.SelectedIndex >= 0 && picker.SelectedIndex < _categories.Count
+            ? _categories[picker.SelectedIndex].Id
+            : null;
+
+    // ------------------------------------------------------- 重新归类（任意文件/文件夹）
+
+    private async void PickFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string? path = await FileOpenPickerService.PickSingleFileAsync(
+                OwnerHandle,
+                new[] { "*" },
+                PickerLocationId.DocumentsLibrary);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                SourcePathBox.Text = path;
+            }
+        }
+        catch (Exception ex)
+        {
+            MoveMessage.Text = "选择文件失败：" + ex.Message;
+        }
+    }
+
+    private async void PickFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string? path = await FolderPickerService.PickFolderAsync(OwnerHandle);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                SourcePathBox.Text = path;
+            }
+        }
+        catch (Exception ex)
+        {
+            MoveMessage.Text = "选择文件夹失败：" + ex.Message;
+        }
+    }
+
+    private async void MoveSourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        string source = SourcePathBox.Text.Trim().Trim('"');
+        string? pathId = CategoryIdAt(TargetCategoryBox);
+        if (string.IsNullOrEmpty(source))
+        {
+            MoveMessage.Text = "先选一个文件或文件夹。";
+            return;
+        }
+
+        if (pathId is null)
+        {
+            MoveMessage.Text = "先选目标分类。";
+            return;
+        }
+
+        MoveMessage.Text = "正在移动…";
+        string body = ReclassifyJson(source, pathId);
+        (bool ok, string message) = await CompanionClient.PostJsonAsync("/api/reclassify", body);
+        MoveMessage.Text = ok ? "已移动到「" + TargetCategoryBox.SelectedItem + "」。" : "移动失败：" + message;
+        if (ok)
+        {
+            SourcePathBox.Text = string.Empty;
+            await RefreshPendingAsync();
+            await RefreshStatusAsync();
+        }
+    }
+
     // ----------------------------------------------------------------- plan
 
     private async Task RefreshPlanAsync()
@@ -298,23 +450,31 @@ public sealed partial class CompanionSettingsSection : UserControl
                 string name = Str(item, "name");
                 string suggestId = Str(item, "suggest_id");
                 string suggestDir = Str(item, "suggest_dir");
+                bool isDir = Bool(item, "is_dir");
 
                 var row = new RowModel
                 {
-                    Title = name,
-                    Detail = "放了 " + (int)Num(item, "age_days") + " 天"
+                    Title = (isDir ? "📁 " : string.Empty) + name,
+                    Detail = (isDir ? "文件夹" : "文件") + " · 放了 " + (int)Num(item, "age_days") + " 天"
                         + (string.IsNullOrEmpty(suggestDir) ? string.Empty : "　建议：" + suggestDir)
                 };
 
-                if (!string.IsNullOrEmpty(suggestId))
+                // Every row gets a category picker: the suggestion is only the
+                // default, the user can drop it anywhere in the tree in one click.
+                ComboBox picker = BuildCategoryPicker(suggestId);
+                row.Extra = picker;
+                row.Buttons.Add(("移动到这里", async () =>
                 {
-                    row.Buttons.Add(("移到建议分类", async () =>
+                    string? targetId = CategoryIdAt(picker);
+                    if (targetId is null)
                     {
-                        string body = PendingJson(name, suggestId);
-                        await CompanionClient.PostJsonAsync("/api/pending/apply", body);
-                        await RefreshPendingAsync();
-                    }));
-                }
+                        return;
+                    }
+
+                    string body = PendingJson(name, targetId);
+                    await CompanionClient.PostJsonAsync("/api/pending/apply", body);
+                    await RefreshPendingAsync();
+                }));
 
                 rows.Add(row);
             }
@@ -437,6 +597,9 @@ public sealed partial class CompanionSettingsSection : UserControl
         public string Title { get; init; } = string.Empty;
         public string Detail { get; init; } = string.Empty;
         public List<(string Text, Func<Task> Action)> Buttons { get; } = new();
+
+        /// <summary>Optional control (the category picker) shown above the buttons.</summary>
+        public FrameworkElement? Extra { get; set; }
     }
 
     private async Task FillListAsync(
@@ -496,13 +659,19 @@ public sealed partial class CompanionSettingsSection : UserControl
             Grid.SetColumn(texts, 0);
             grid.Children.Add(texts);
 
-            if (row.Buttons.Count > 0)
+            if (row.Extra is not null || row.Buttons.Count > 0)
             {
+                var side = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+                if (row.Extra is not null)
+                {
+                    side.Children.Add(row.Extra);
+                }
+
                 var buttons = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 6,
-                    VerticalAlignment = VerticalAlignment.Center
+                    HorizontalAlignment = HorizontalAlignment.Right
                 };
                 foreach ((string text, Func<Task> action) in row.Buttons)
                 {
@@ -512,8 +681,9 @@ public sealed partial class CompanionSettingsSection : UserControl
                     buttons.Children.Add(button);
                 }
 
-                Grid.SetColumn(buttons, 1);
-                grid.Children.Add(buttons);
+                side.Children.Add(buttons);
+                Grid.SetColumn(side, 1);
+                grid.Children.Add(side);
             }
 
             host.Children.Add(grid);
@@ -604,6 +774,20 @@ public sealed partial class CompanionSettingsSection : UserControl
             }
 
             writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string ReclassifyJson(string src, string pathId)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("src", src);
+            writer.WriteString("path_id", pathId);
             writer.WriteEndObject();
         }
 

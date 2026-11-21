@@ -30,6 +30,8 @@ public sealed partial class CompanionPanelWindow : Window
             AppWindow appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hWnd));
             appWindow.Resize(new SizeInt32(960, 880));
             AppBranding.ApplyWindowIcon(appWindow);
+            // The section's file/folder pickers must be owner-attached.
+            Section.OwnerHandle = hWnd;
         }
         catch (Exception)
         {

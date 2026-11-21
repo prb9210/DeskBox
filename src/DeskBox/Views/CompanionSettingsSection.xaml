@@ -172,6 +172,47 @@
             <TextBlock x:Name="SaveMessage" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
         </StackPanel>
 
+        <!-- ============================ 重新归类 ============================ -->
+        <toolkit:SettingsCard
+            Description="已经归档的文件或文件夹也能改地方：选源、选目标分类，一键移动，并把这次判断记成规则"
+            Header="重新归类"
+            HorizontalContentAlignment="Stretch">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8AB;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Grid ColumnSpacing="16" RowSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="源文件/文件夹" />
+                <Grid Grid.Row="0" Grid.Column="1" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" x:Name="SourcePathBox" PlaceholderText="在资源管理器里右键 →「复制文件地址」，粘到这里" />
+                    <Button Grid.Column="1" Click="PickFileButton_Click" Content="选文件…" />
+                    <Button Grid.Column="2" Click="PickFolderButton_Click" Content="选文件夹…" />
+                </Grid>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="目标分类" />
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="TargetCategoryBox" HorizontalAlignment="Stretch" />
+
+                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="MoveSourceButton" Click="MoveSourceButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="移动过去" />
+                    <TextBlock x:Name="MoveMessage" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </toolkit:SettingsCard>
+
         <!-- ======================= 列表区（一套卡片壳） ======================= -->
         <toolkit:SettingsCard
             Description="只预览不会移动；确认无误再点上面的「立即整理」"
@@ -196,7 +237,7 @@
         <StackPanel x:Name="ConflictList" Spacing="6" Margin="16,6,16,14" />
 
         <toolkit:SettingsCard
-            Description="管家拿不准的文件都在这里，可按建议分类一键移动"
+            Description="管家拿不准的文件和文件夹都在这里：每行选一个分类点「移动到这里」；建议只是默认值"
             Header="待归类治理"
             HorizontalContentAlignment="Stretch">
             <toolkit:SettingsCard.HeaderIcon>
