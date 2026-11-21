@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DeskBox.Views.CompanionSettingsSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ms-appx:///Styles/SettingsOverviewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel Style="{StaticResource SectionPanelStyle}" Spacing="4">
+
+        <!-- 运行状态 -->
+        <toolkit:SettingsCard
+            Description="引擎每 20 秒扫一次桌面；这里的数据每 5 秒自动刷新"
+            Header="运行状态">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE9D9;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Grid ColumnSpacing="18" RowSpacing="8" MinWidth="360">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="当前动作" />
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ActionValue" Text="-" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近扫描" />
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ScanValue" Text="-" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近整理" />
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ApplyValue" Text="-" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近同步" />
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="SyncValue" Text="-" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近错误" />
+                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ErrorValue" Text="-" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="AI 分类" />
+                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="AiValue" Text="-" TextWrapping="Wrap" />
+            </Grid>
+        </toolkit:SettingsCard>
+
+        <!-- 立即操作 -->
+        <toolkit:SettingsCard
+            Description="整理与同步互斥：同步进行中整理会排队，绝不并发搬同一批文件"
+            Header="立即操作">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE768;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel Spacing="6" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button x:Name="ApplyNowButton" Click="ApplyNowButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="立即整理" />
+                    <Button x:Name="SyncNowButton" Click="SyncNowButton_Click" Content="立即同步" />
+                    <Button x:Name="BackupNowButton" Click="BackupNowButton_Click" Content="立即备份" />
+                </StackPanel>
+                <TextBlock x:Name="ActionMessage" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" TextAlignment="Right" />
+            </StackPanel>
+        </toolkit:SettingsCard>
+
+        <!-- 文件夹 -->
+        <toolkit:SettingsCard
+            Description="桌面：管家盯的目录；共享库：分类后的家。两者都不要放在 DeskBox 的托管存储里"
+            Header="文件夹">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8B7;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel Spacing="8" MinWidth="360">
+                <TextBox x:Name="DesktopBox" Header="桌面文件夹" />
+                <TextBox x:Name="LibraryBox" Header="共享库文件夹" />
+                <TextBlock x:Name="TrashText" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" Text="待删除目录：-" />
+            </StackPanel>
+        </toolkit:SettingsCard>
+
+        <!-- 同步 -->
+        <toolkit:SettingsCard
+            Description="走坚果云客户端同步时，请关掉这里的 WebDAV 同步，避免两条路互相干扰"
+            Header="同步与备份">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE895;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel Spacing="10" MinWidth="360">
+                <ComboBox x:Name="IntervalBox" Header="同步间隔" MinWidth="220" SelectionChanged="IntervalBox_SelectionChanged" />
+                <ToggleSwitch x:Name="SyncEnabledSwitch" Header="启用管家自带 WebDAV 同步" OnContent="开" OffContent="关" />
+            </StackPanel>
+        </toolkit:SettingsCard>
+
+        <!-- 账号与密钥 -->
+        <toolkit:SettingsCard
+            Description="应用密码在坚果云网页「账户信息 → 安全选项 → 添加应用」生成；密钥留空表示不修改"
+            Header="坚果云与 AI">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8D7;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel Spacing="8" MinWidth="360">
+                <TextBox x:Name="UserBox" Header="坚果云账号（邮箱）" />
+                <PasswordBox x:Name="PasswordBoxControl" Header="坚果云应用密码" PlaceholderText="留空则不修改" />
+                <PasswordBox x:Name="ApiKeyBox" Header="DeepSeek 密钥" PlaceholderText="留空则不修改" />
+            </StackPanel>
+        </toolkit:SettingsCard>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,8">
+            <Button x:Name="SaveButton" Click="SaveButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="保存设置" />
+            <TextBlock x:Name="SaveMessage" Style="{StaticResource SettingDescriptionTextStyle}" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 待整理计划 -->
+        <toolkit:SettingsCard Header="待整理计划" Description="只预览，不会移动；确认无误再点「立即整理」">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8FD;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button Click="RefreshPlanButton_Click" Content="刷新" />
+        </toolkit:SettingsCard>
+        <StackPanel x:Name="PlanList" Spacing="6" Margin="16,0,16,8" />
+
+        <!-- 冲突 -->
+        <toolkit:SettingsCard Header="同步冲突" Description="同一文件两端都改过；每组留一份，其余归集到 _冲突">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE7BA;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button Click="ArchiveConflictsButton_Click" Content="归集冲突副本" />
+        </toolkit:SettingsCard>
+        <StackPanel x:Name="ConflictList" Spacing="6" Margin="16,0,16,8" />
+
+        <!-- 待归类 -->
+        <toolkit:SettingsCard Header="待归类治理" Description="管家拿不准的文件都在这里，选中后指定目标分类">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8F1;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button Click="RefreshPendingButton_Click" Content="刷新" />
+        </toolkit:SettingsCard>
+        <StackPanel x:Name="PendingList" Spacing="6" Margin="16,0,16,8" />
+
+        <!-- 重复 -->
+        <toolkit:SettingsCard Header="重复文件" Description="按大小与内容比对；「多余的移到 _重复」只移动、不删除">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE8C8;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button Click="RefreshDuplicatesButton_Click" Content="重新扫描" />
+        </toolkit:SettingsCard>
+        <StackPanel x:Name="DuplicateList" Spacing="6" Margin="16,0,16,8" />
+
+        <!-- 新分类建议 -->
+        <toolkit:SettingsCard Header="新分类建议" Description="同一主题攒够文件后，管家会建议新建一个分类目录">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE710;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Button Click="RefreshProposalsButton_Click" Content="刷新" />
+        </toolkit:SettingsCard>
+        <StackPanel x:Name="ProposalList" Spacing="6" Margin="16,0,16,8" />
+    </StackPanel>
+</UserControl>

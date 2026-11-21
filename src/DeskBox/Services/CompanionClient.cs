@@ -89,6 +89,49 @@ public static class CompanionClient
         }
     }
 
+    /// <summary>GETs a JSON endpoint; null when the engine is down or the body is not JSON.</summary>
+    public static async Task<JsonDocument?> GetJsonAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using System.Net.Http.HttpResponseMessage response =
+                await Http.GetAsync(BaseUrl + path, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(body) ? null : JsonDocument.Parse(body);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>POSTs a JSON body to an endpoint and returns the response text.</summary>
+    public static async Task<(bool Ok, string Message)> PostJsonAsync(
+        string path,
+        string json,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using System.Net.Http.HttpResponseMessage response =
+                await Http.PostAsync(BaseUrl + path, content, cancellationToken).ConfigureAwait(false);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return (response.IsSuccessStatusCode, body);
+        }
+        catch (Exception ex)
+        {
+            return (false, "连不上管家引擎：" + ex.Message);
+        }
+    }
+
     /// <summary>POSTs one of the engine's action endpoints and returns its text.</summary>
     public static async Task<(bool Ok, string Message)> PostAsync(
         string path,
