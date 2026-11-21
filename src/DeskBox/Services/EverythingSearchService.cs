@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using DeskBox.Models;
 using DeskBox.Contracts;
 using DeskBox.Platform;
@@ -435,23 +436,47 @@ public sealed class EverythingSearchService : IDisposable, ISearchConnectionClie
             // forever. Non-blocking submit + bounded poll instead — on
             // timeout or cancel the query is stopped and the failure routes
             // through the same EverythingIpcException path as an IPC error.
-            if (EverythingNativeMethods.Query(0) == 0)
+            // Everything 1.5 answers the non-blocking submit differently from 1.4:
+            // IsQueryAvailable() reports ready straight away while the result list
+            // is still empty, so polling it produced "connected but always zero
+            // results". A blocking query on a worker thread, bounded by the same
+            // watchdog, behaves identically on 1.4 and 1.5.
+            const int QueryWatchdogMs = 10_000;
+            int queryOk = 0;
+            uint queryError = EverythingNativeMethods.ErrorOk;
+            Task<int> blocking = Task.Run(
+                () =>
+                {
+                    int ok = EverythingNativeMethods.Query(1);
+                    if (ok == 0)
+                    {
+                        queryError = EverythingNativeMethods.GetLastError();
+                    }
+
+                    return ok;
+                },
+                cancellationToken);
+
+            bool finished;
+            try
             {
+                finished = blocking.Wait(QueryWatchdogMs, cancellationToken);
+            }
+            catch (AggregateException)
+            {
+                finished = true;
+            }
+
+            if (!finished)
+            {
+                EverythingNativeMethods.StopQuery();
                 throw new EverythingIpcException(EverythingNativeMethods.GetLastError());
             }
 
-            const int QueryWatchdogMs = 10_000;
-            var watchdog = Stopwatch.StartNew();
-            while (!EverythingNativeMethods.IsQueryAvailable())
+            queryOk = blocking.Result;
+            if (queryOk == 0)
             {
-                if (watchdog.ElapsedMilliseconds >= QueryWatchdogMs)
-                {
-                    EverythingNativeMethods.StopQuery();
-                    throw new EverythingIpcException(EverythingNativeMethods.GetLastError());
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-                Thread.Sleep(50);
+                throw new EverythingIpcException(queryError);
             }
 
             nativeCount = EverythingNativeMethods.GetNumResults();
