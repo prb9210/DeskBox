@@ -12,7 +12,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Shapes;
+using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
@@ -370,7 +370,7 @@ public sealed partial class WidgetDrawerWindow : Window
             double a0 = mid - span / 2;
             double a1 = mid + span / 2;
 
-            var sector = new Path
+            var sector = new XamlPath
             {
                 Data = BuildSector(center, FanInner, FanOuter, a0, a1),
                 Fill = BuildSectorBrush(visible),
