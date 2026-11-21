@@ -96,7 +96,7 @@
             </toolkit:SettingsCard.HeaderIcon>
             <StackPanel Spacing="10" MinWidth="360">
                 <ComboBox x:Name="IntervalBox" Header="同步间隔" MinWidth="220" SelectionChanged="IntervalBox_SelectionChanged" />
-                <ToggleSwitch x:Name="SyncEnabledSwitch" Header="启用管家自带 WebDAV 同步" OnContent="开" OffContent="关" />
+                <CheckBox x:Name="SyncEnabledCheck" Content="启用管家自带 WebDAV 同步（走坚果云客户端时请取消）" />
             </StackPanel>
         </toolkit:SettingsCard>
 

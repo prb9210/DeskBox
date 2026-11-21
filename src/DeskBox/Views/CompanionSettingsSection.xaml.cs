@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using DeskBox.Services;
@@ -109,7 +111,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             DesktopBox.Text = Str(root, "desktop");
             LibraryBox.Text = Str(root, "library");
             UserBox.Text = Str(root, "webdav_user");
-            SyncEnabledSwitch.IsOn = Bool(root, "sync_enabled");
+            SyncEnabledCheck.IsChecked = Bool(root, "sync_enabled");
 
             int interval = (int)Num(root, "interval_minutes");
             int index = Array.IndexOf(IntervalChoices, interval);
@@ -137,26 +139,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             ? IntervalChoices[IntervalBox.SelectedIndex]
             : 30;
 
-        var payload = new Dictionary<string, object>
-        {
-            ["desktop"] = DesktopBox.Text.Trim(),
-            ["library"] = LibraryBox.Text.Trim(),
-            ["webdav_user"] = UserBox.Text.Trim(),
-            ["interval_minutes"] = minutes,
-            ["sync_enabled"] = SyncEnabledSwitch.IsOn
-        };
-
-        if (!string.IsNullOrEmpty(PasswordBoxControl.Password))
-        {
-            payload["webdav_password"] = PasswordBoxControl.Password;
-        }
-
-        if (!string.IsNullOrEmpty(ApiKeyBox.Password))
-        {
-            payload["api_key"] = ApiKeyBox.Password;
-        }
-
-        (bool ok, string message) = await CompanionClient.PostJsonAsync("/api/settings", JsonSerializer.Serialize(payload));
+        (bool ok, string message) = await CompanionClient.PostJsonAsync("/api/settings", SettingsJson(minutes));
         SaveMessage.Text = ok ? "已保存，立即生效。" : "保存失败：" + message;
         PasswordBoxControl.Password = string.Empty;
         ApiKeyBox.Password = string.Empty;
@@ -280,11 +263,7 @@ public sealed partial class CompanionSettingsSection : UserControl
 
                 row.Buttons.Add(("保留最新那份", async () =>
                 {
-                    string body = JsonSerializer.Serialize(new Dictionary<string, object>
-                    {
-                        ["keep"] = keep,
-                        ["remove"] = remove
-                    });
+                    string body = ConflictJson(keep, remove);
                     await CompanionClient.PostJsonAsync("/api/conflicts/resolve", body);
                     await RefreshConflictsAsync();
                 }));
@@ -331,11 +310,7 @@ public sealed partial class CompanionSettingsSection : UserControl
                 {
                     row.Buttons.Add(("移到建议分类", async () =>
                     {
-                        string body = JsonSerializer.Serialize(new Dictionary<string, object>
-                        {
-                            ["names"] = new[] { name },
-                            ["path_id"] = suggestId
-                        });
+                        string body = PendingJson(name, suggestId);
                         await CompanionClient.PostJsonAsync("/api/pending/apply", body);
                         await RefreshPendingAsync();
                     }));
@@ -393,7 +368,7 @@ public sealed partial class CompanionSettingsSection : UserControl
                 };
                 row.Buttons.Add(("多余的移到 _重复", async () =>
                 {
-                    string body = JsonSerializer.Serialize(new Dictionary<string, object> { ["paths"] = extras });
+                    string body = ArrayJson("paths", extras);
                     await CompanionClient.PostJsonAsync("/api/duplicates/archive", body);
                     await RefreshDuplicatesAsync();
                 }));
@@ -448,11 +423,7 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     private async Task DecideAsync(string id, string action)
     {
-        string body = JsonSerializer.Serialize(new Dictionary<string, object>
-        {
-            ["id"] = id,
-            ["action"] = action
-        });
+        string body = ProposalJson(id, action);
         await CompanionClient.PostJsonAsync("/api/proposals", body);
         await RefreshProposalsAsync();
     }
@@ -530,6 +501,107 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     private static void AddHint(StackPanel host, string text) =>
         host.Children.Add(new TextBlock { Text = text, FontSize = 12, Opacity = 0.7, TextWrapping = TextWrapping.Wrap });
+
+
+    // ------------------------------------------------------- JSON (AOT-safe)
+    // Utf8JsonWriter instead of JsonSerializer: the reflection-based overloads
+    // raise IL2026/IL3050 and the AOT retail publish treats those as errors.
+
+    private string SettingsJson(int minutes)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("desktop", DesktopBox.Text.Trim());
+            writer.WriteString("library", LibraryBox.Text.Trim());
+            writer.WriteString("webdav_user", UserBox.Text.Trim());
+            writer.WriteNumber("interval_minutes", minutes);
+            writer.WriteBoolean("sync_enabled", SyncEnabledCheck.IsChecked == true);
+            if (!string.IsNullOrEmpty(PasswordBoxControl.Password))
+            {
+                writer.WriteString("webdav_password", PasswordBoxControl.Password);
+            }
+
+            if (!string.IsNullOrEmpty(ApiKeyBox.Password))
+            {
+                writer.WriteString("api_key", ApiKeyBox.Password);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string ConflictJson(string keep, List<string> remove)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("keep", keep);
+            writer.WriteStartArray("remove");
+            foreach (string path in remove)
+            {
+                writer.WriteStringValue(path);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string PendingJson(string name, string pathId)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartArray("names");
+            writer.WriteStringValue(name);
+            writer.WriteEndArray();
+            writer.WriteString("path_id", pathId);
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string ArrayJson(string property, List<string> values)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartArray(property);
+            foreach (string value in values)
+            {
+                writer.WriteStringValue(value);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string ProposalJson(string id, string action)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", id);
+            writer.WriteString("action", action);
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 
     // ---------------------------------------------------------------- JSON
 
