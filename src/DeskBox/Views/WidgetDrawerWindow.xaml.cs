@@ -110,7 +110,7 @@ public sealed partial class WidgetDrawerWindow : Window
         // is black, which is exactly the "black shape with a frame" artifact.
         try
         {
-            SystemBackdrop = new TransparentTintBackdrop();
+            SystemBackdrop = new WinUIEx.TransparentTintBackdrop(Colors.Transparent);
         }
         catch (Exception ex)
         {
