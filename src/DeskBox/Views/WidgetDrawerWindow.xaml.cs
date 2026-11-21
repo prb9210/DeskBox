@@ -31,18 +31,18 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             IntPtr hWnd = WindowNative.GetWindowHandle(this);
             AppWindow appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hWnd));
-            appWindow.Resize(new SizeInt32(WindowSize, WindowSize));
+            // Presenter + switcher state must route through WindowShellState:
+            // early-logon sessions reject the raw calls with E_NOTIMPL.
+            WindowShellState.TryApplyBorderlessOverlappedPresenter(appWindow);
             // A helper handle, not a document: keep it out of Alt-Tab and the
             // taskbar so it can never be lost behind other windows' entries.
-            appWindow.IsShownInSwitchers = false;
+            WindowShellState.TryHideFromSwitchers(appWindow);
             if (appWindow.Presenter is OverlappedPresenter presenter)
             {
-                presenter.SetBorderAndTitleBar(false, false);
-                presenter.IsResizable = false;
-                presenter.IsMaximizable = false;
-                presenter.IsMinimizable = false;
                 presenter.IsAlwaysOnTop = true;
             }
+
+            appWindow.Resize(new SizeInt32(WindowSize, WindowSize));
 
             AppBranding.ApplyWindowIcon(appWindow);
         }
