@@ -26,6 +26,92 @@ public partial class App
         TryQueueCompanionLibraryWidgets();
     }
 
+    /// <summary>
+    /// Lays the four library widgets out in a tidy grid. Runs before the widget
+    /// windows are restored, so the stored rects win and nothing has to be
+    /// dragged by hand.
+    /// </summary>
+    private void ArrangeCompanionWidgets()
+    {
+        try
+        {
+            string companionDirectory = Path.Combine(AppContext.BaseDirectory, "companion");
+            string configPath = Path.Combine(companionDirectory, "config.json");
+            string markerPath = Path.Combine(companionDirectory, "widgets.arranged");
+            if (!File.Exists(configPath) || File.Exists(markerPath))
+            {
+                return;
+            }
+
+            string library = ReadCompanionLibraryPath(configPath);
+            if (string.IsNullOrWhiteSpace(library))
+            {
+                return;
+            }
+
+            string root = library.TrimEnd('\\') + "\\";
+            var targets = new List<WidgetConfig>();
+            foreach (WidgetConfig widget in SettingsService.Settings.WidgetLayout.Widgets)
+            {
+                string? mapped = widget.MappedFolderPath;
+                if (!string.IsNullOrWhiteSpace(mapped) &&
+                    mapped!.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                {
+                    targets.Add(widget);
+                }
+            }
+
+            if (targets.Count == 0)
+            {
+                return;
+            }
+
+            const double width = 356;
+            const double height = 428;
+            const double gap = 18;
+            const double margin = 40;
+
+            double screenWidth = 1920;
+            double screenHeight = 1040;
+            var screens = WidgetScreenCatalog.Capture();
+            if (screens.Count > 0)
+            {
+                screenWidth = screens[0].WorkArea.Width;
+                screenHeight = screens[0].WorkArea.Height;
+            }
+
+            int perRow = Math.Max(1, (int)((screenWidth - (margin * 2) + gap) / (width + gap)));
+            if (perRow > targets.Count)
+            {
+                perRow = targets.Count;
+            }
+
+            int rows = (int)Math.Ceiling(targets.Count / (double)perRow);
+            double totalWidth = (perRow * width) + ((perRow - 1) * gap);
+            double totalHeight = (rows * height) + ((rows - 1) * gap);
+            double startX = Math.Max(margin, (screenWidth - totalWidth) / 2);
+            double startY = Math.Max(margin, (screenHeight - totalHeight) / 2);
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                int row = i / perRow;
+                int column = i % perRow;
+                targets[i].X = Math.Round(startX + (column * (width + gap)));
+                targets[i].Y = Math.Round(startY + (row * (height + gap)));
+                targets[i].Width = width;
+                targets[i].Height = height;
+            }
+
+            SettingsService.SaveDebounced(notifySubscribers: false);
+            File.WriteAllText(markerPath, DateTime.Now.ToString("s") + " arranged=" + targets.Count);
+            Log($"[Companion] arranged {targets.Count} library widget(s)");
+        }
+        catch (Exception ex)
+        {
+            Log($"[Companion] widget arrangement failed: {ex.Message}");
+        }
+    }
+
     private void TryQueueCompanionLibraryWidgets()
     {
         try

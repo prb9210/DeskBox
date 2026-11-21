@@ -1445,6 +1445,7 @@ public partial class App : Application
                 Log("[Search] Feature disabled; search services were not initialized");
             }
 
+            RunOptionalStartupStep("companion-widget-layout", ArrangeCompanionWidgets);
             RunCriticalStartupStep("widget-manager", () =>
             {
                 WidgetManager = new WidgetManager(SettingsService, FileService, OrganizerService,
