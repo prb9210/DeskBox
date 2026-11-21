@@ -149,9 +149,9 @@ public sealed class TrayContextMenuResilienceTests
             "private void CreateTrayIcon()",
             "/// <summary>Attempts per tray creation pass");
         Assert.DoesNotContain(".Click +=", create, StringComparison.Ordinal);
-        // Seven fixed items: organize, map folder, feature widgets, settings,
-        // managed storage, update, exit.
-        Assert.Equal(7, CountOccurrences(create, "AttachTrayMenuItemInteraction("));
+        // Eight fixed items: organize, companion panel, map folder, feature
+        // widgets, settings, managed storage, update, exit.
+        Assert.Equal(8, CountOccurrences(create, "AttachTrayMenuItemInteraction("));
 
         string createWidget = Slice(
             tray,
