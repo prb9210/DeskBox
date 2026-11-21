@@ -242,6 +242,7 @@
     </Content>
     <Content Include="Assets\自动更新.ps1">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>自动更新.ps1</TargetPath>
     </Content>
     <Content Include="Assets\deskbox.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

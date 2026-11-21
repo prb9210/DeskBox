@@ -44,7 +44,22 @@ public static class LocalUpdateChannel
     public static string InstallDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskBox");
 
-    public static string WorkerPath => Path.Combine(AppContext.BaseDirectory, WorkerFileName);
+    public static string WorkerPath
+    {
+        get
+        {
+            string root = Path.Combine(AppContext.BaseDirectory, WorkerFileName);
+            if (File.Exists(root))
+            {
+                return root;
+            }
+
+            // Older packages copied the worker under Assets\ because the csproj
+            // content item kept its source folder; keep that layout working.
+            string legacy = Path.Combine(AppContext.BaseDirectory, "Assets", WorkerFileName);
+            return File.Exists(legacy) ? legacy : root;
+        }
+    }
 
     public static string CurrentVersion
     {
