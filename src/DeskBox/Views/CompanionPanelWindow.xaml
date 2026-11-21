@@ -32,13 +32,16 @@
             Background="{ThemeResource LayerFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             BorderThickness="0,1,0,0">
+            <!-- Same content width as the settings window (760) so the two pages
+                 share one column rhythm; the column stays centred when the
+                 window is resized instead of stretching a fixed-width form. -->
             <ScrollViewer
                 Padding="20,16,20,32"
                 HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto">
                 <sections:CompanionSettingsSection
                     x:Name="Section"
-                    MaxWidth="920"
+                    MaxWidth="760"
                     HorizontalAlignment="Stretch" />
             </ScrollViewer>
         </Border>

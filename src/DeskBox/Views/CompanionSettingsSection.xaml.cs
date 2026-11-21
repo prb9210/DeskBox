@@ -467,35 +467,56 @@ public sealed partial class CompanionSettingsSection : UserControl
 
         foreach (RowModel row in rows)
         {
-            var panel = new StackPanel { Spacing = 2 };
-            panel.Children.Add(new TextBlock { Text = row.Title, TextWrapping = TextWrapping.Wrap });
+            // Text on the left, actions on the right — the same idiom as a
+            // SettingsCard row, so the lists read as part of the page.
+            var grid = new Grid { ColumnSpacing = 12, Margin = new Thickness(0, 7, 0, 7) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var texts = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            texts.Children.Add(new TextBlock
+            {
+                Text = row.Title,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
 
             if (!string.IsNullOrEmpty(row.Detail))
             {
-                panel.Children.Add(new TextBlock
+                texts.Children.Add(new TextBlock
                 {
                     Text = row.Detail,
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
-                    Opacity = 0.72
+                    Opacity = 0.7
                 });
             }
 
+            Grid.SetColumn(texts, 0);
+            grid.Children.Add(texts);
+
             if (row.Buttons.Count > 0)
             {
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 4, 0, 0) };
+                var buttons = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
                 foreach ((string text, Func<Task> action) in row.Buttons)
                 {
-                    var button = new Button { Content = text, FontSize = 12 };
+                    var button = new Button { Content = text, FontSize = 12, Padding = new Thickness(10, 4, 10, 4) };
                     Func<Task> captured = action;
                     button.Click += async (_, _) => await captured();
                     buttons.Children.Add(button);
                 }
 
-                panel.Children.Add(buttons);
+                Grid.SetColumn(buttons, 1);
+                grid.Children.Add(buttons);
             }
 
-            host.Children.Add(panel);
+            host.Children.Add(grid);
         }
     }
 
