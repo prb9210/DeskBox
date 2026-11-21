@@ -60,8 +60,8 @@ public sealed class WidgetDrawerSettings
         {
             if (File.Exists(target))
             {
-                WidgetDrawerSettings? loaded =
-                    JsonSerializer.Deserialize<WidgetDrawerSettings>(File.ReadAllText(target));
+                WidgetDrawerSettings? loaded = JsonSerializer.Deserialize(
+                    File.ReadAllText(target), WidgetDrawerJsonContext.Default.WidgetDrawerSettings);
                 if (loaded is not null)
                 {
                     loaded.Path = target;
@@ -88,10 +88,10 @@ public sealed class WidgetDrawerSettings
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(Path, JsonSerializer.Serialize(this, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            }));
+            // Source-generated context: the reflection overloads raise
+            // IL2026/IL3050, which the AOT retail publish treats as failures.
+            File.WriteAllText(Path, JsonSerializer.Serialize(
+                this, WidgetDrawerJsonContext.Default.WidgetDrawerSettings));
         }
         catch (Exception ex)
         {
@@ -128,4 +128,10 @@ public sealed class WidgetDrawerSettings
             CollapsedWidgetIds.Remove(widgetId);
         }
     }
+}
+
+/// <summary>Source-generated serialization for the drawer state file.</summary>
+[JsonSerializable(typeof(WidgetDrawerSettings))]
+internal sealed partial class WidgetDrawerJsonContext : JsonSerializerContext
+{
 }
