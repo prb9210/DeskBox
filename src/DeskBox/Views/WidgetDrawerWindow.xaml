@@ -2,20 +2,17 @@
 <Window
     x:Class="DeskBox.Views.WidgetDrawerWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
 
-    <!--
-        One scene, two states. Closed, the window is 64 DIP and the ball fills
-        it; open, the same scene is shown at 460 DIP with the fan drawn around
-        the ball, which stays pinned to the canvas centre. The scene is
-        translated (not rebuilt) when switching, so the ball never jumps.
-
-        The window uses a transparent system backdrop: with a black backdrop any
-        pixel we do not paint would show as a black hole through the circle.
-    -->
+    <!-- No fixed sizes anywhere: the ball is placed from the window's real
+         client size in code, so DPI scaling cannot push it off the frame. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
+        DoubleTapped="RootGrid_DoubleTapped"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited"
         PointerMoved="RootGrid_PointerMoved"
@@ -23,55 +20,48 @@
         PointerReleased="RootGrid_PointerReleased"
         RightTapped="RootGrid_RightTapped">
 
-        <Canvas
-            x:Name="Scene"
-            Width="460"
-            Height="460"
-            Background="{x:Null}">
-            <Canvas.RenderTransform>
-                <TranslateTransform x:Name="SceneShift" X="0" Y="0" />
-            </Canvas.RenderTransform>
+        <Canvas x:Name="FanCanvas" />
 
-            <Canvas
-                x:Name="FanCanvas"
-                Width="460"
-                Height="460"
-                Background="{x:Null}"
-                Opacity="0" />
-
+        <Canvas x:Name="BallLayer">
+            <!-- Outer glow ring -->
             <Border
                 x:Name="BallRing"
-                Width="62"
-                Height="62"
-                BorderBrush="#2EFFFFFF"
+                Width="64"
+                Height="64"
+                CornerRadius="32"
                 BorderThickness="1"
-                CornerRadius="31"
+                Background="{x:Null}"
                 IsHitTestVisible="False" />
 
+            <!-- The bead -->
             <Border
                 x:Name="Ball"
                 Width="56"
                 Height="56"
-                BorderThickness="1.2"
-                CornerRadius="28">
+                CornerRadius="28"
+                BorderThickness="1.2">
                 <Grid>
                     <TextBlock
                         x:Name="BallGlyph"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        FontSize="19"
+                        FontFamily="Microsoft YaHei UI"
+                        FontSize="17"
                         FontWeight="SemiBold"
                         Foreground="White"
+                        IsHitTestVisible="False"
                         Text="格" />
                     <Border
                         x:Name="StateDot"
-                        Width="8"
-                        Height="8"
-                        Margin="0,0,9,9"
+                        Width="9"
+                        Height="9"
+                        Margin="0,0,4,4"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Bottom"
                         Background="White"
-                        CornerRadius="4"
+                        BorderBrush="#33000000"
+                        BorderThickness="1"
+                        CornerRadius="4.5"
                         Visibility="Collapsed" />
                 </Grid>
             </Border>
