@@ -96,7 +96,12 @@ public sealed partial class CompanionSettingsSection : UserControl
             LocalUpdateChannel.UpdateStatus status = LocalUpdateChannel.Check();
             if (!status.UpdateAvailable)
             {
-                UpdateStateValue.Text = status.Message;
+                // No local sync folder (or already current): the worker also
+                // knows the cloud channel, so let it decide instead of stopping.
+                UpdateStateValue.Text = "正在检查云端通道…";
+                string probe = await LocalUpdateChannel.RunWorkerAsync();
+                UpdateStateValue.Text = probe + "\n" + status.Message;
+                RefreshUpdateUi();
                 return;
             }
 
