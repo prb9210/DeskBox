@@ -244,14 +244,6 @@ Text="DeskBox" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem
-                    x:Name="CompanionNavItem"
-                    Tag="CompanionSettings"
-                    Content="桌面管家">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE7B8;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem
                     x:Name="FeatureWidgetsNavItem"
                     Tag="FeatureWidgets"
                     svc:Localized.Key="Settings.Nav.FeatureWidgets">

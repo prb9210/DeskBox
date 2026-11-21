@@ -281,6 +281,7 @@ public sealed partial class SettingsWindow : Window
             handledEventsToo: true);
         CollectResponsiveRows(SettingsRoot);
         SettingsRoot.Loaded += SettingsRoot_Loaded;
+        InsertCompanionNavItem();
         LogConstructionCheckpoint("bindings-and-responsive-tree");
 
         WindowsCompatibilityService.ApplySafeBackdrop(this);
@@ -414,6 +415,40 @@ public sealed partial class SettingsWindow : Window
         }
 
         panel.DataContext = _appearanceSettingsViewModel;
+    }
+
+
+    /// <summary>桌面管家是独立标签：和文件格子同级。用代码插入，避免 XAML 里的项
+    /// 被导航的可见性/本地化流程漏掉（1.5.9 就是这样没显示出来）。</summary>
+    private void InsertCompanionNavItem()
+    {
+        foreach (object entry in SettingsNavigationView.MenuItems)
+        {
+            if (entry is NavigationViewItem existing && (string?)existing.Tag == "CompanionSettings")
+            {
+                return;
+            }
+        }
+
+        var item = new NavigationViewItem
+        {
+            Tag = "CompanionSettings",
+            Content = "桌面管家",
+            Icon = new FontIcon { Glyph = "\uE7B8" },
+        };
+
+        int insertAt = SettingsNavigationView.MenuItems.Count;
+        for (int i = 0; i < SettingsNavigationView.MenuItems.Count; i++)
+        {
+            if (SettingsNavigationView.MenuItems[i] is NavigationViewItem candidate &&
+                (string?)candidate.Tag == "FeatureWidgets")
+            {
+                insertAt = i;
+                break;
+            }
+        }
+
+        SettingsNavigationView.MenuItems.Insert(insertAt, item);
     }
 
     private void SettingsRoot_Loaded(object sender, RoutedEventArgs e)

@@ -45,6 +45,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private bool _expanded;
     private bool _pointerDown;
+    private bool _collapseHandledPress;
     private bool _dragging;
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
@@ -628,6 +629,7 @@ public sealed partial class WidgetDrawerWindow : Window
             }
 
             SetExpanded(false);
+            _collapseHandledPress = true;
             e.Handled = true;
             return;
         }
@@ -695,6 +697,16 @@ public sealed partial class WidgetDrawerWindow : Window
     {
         RootGrid.ReleasePointerCapture(e.Pointer);
         _pointerDown = false;
+
+        if (_collapseHandledPress)
+        {
+            // This release belongs to the press that collapsed the ring; without
+            // this guard the ring reopened immediately, so a second click on the
+            // ball could never close it.
+            _collapseHandledPress = false;
+            Animate(Ball, 1.0);
+            return;
+        }
 
         if (_dragging)
         {

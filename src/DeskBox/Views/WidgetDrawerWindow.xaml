@@ -30,9 +30,20 @@
                 Width="66"
                 Height="66"
                 IsHitTestVisible="False"
+                Stroke="#66FFFFFF"
                 StrokeThickness="1" />
 
-            <Ellipse x:Name="Ball" Width="56" Height="56" IsHitTestVisible="False" />
+            <!-- Default fill lives in XAML: if the colour code path ever fails to
+                 run, the ball must still be an opaque circle rather than an
+                 invisible ring on top of the window backdrop. -->
+            <Ellipse x:Name="Ball" Width="56" Height="56" IsHitTestVisible="False">
+                <Ellipse.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Offset="0" Color="#FF3B82F6" />
+                        <GradientStop Offset="1" Color="#FF1D4ED8" />
+                    </LinearGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
 
             <TextBlock
                 x:Name="BallGlyph"
