@@ -65,6 +65,49 @@
             </Grid>
         </toolkit:SettingsCard>
 
+        <!-- ============================ 程序更新 ============================ -->
+        <toolkit:SettingsCard
+            Description="新版本通过坚果云同步过来，这里一键安装，不用再从微信下载压缩包"
+            Header="程序更新"
+            HorizontalContentAlignment="Stretch">
+            <toolkit:SettingsCard.HeaderIcon>
+                <FontIcon Glyph="&#xE895;" />
+            </toolkit:SettingsCard.HeaderIcon>
+            <Grid ColumnSpacing="16" RowSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="当前版本" />
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="UpdateVersionValue" Text="-" TextWrapping="Wrap" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingDescriptionTextStyle}" Text="更新状态" />
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="UpdateStateValue" Text="-" TextWrapping="Wrap" />
+
+                <StackPanel
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="12">
+                    <Button
+                        x:Name="UpdateNowButton"
+                        Click="UpdateNow_Click"
+                        Content="立即检查并更新" />
+                    <CheckBox
+                        x:Name="AutoUpdateCheckBox"
+                        Checked="AutoUpdateCheckBox_Checked"
+                        Content="开机自动检查（每 2 小时）"
+                        Unchecked="AutoUpdateCheckBox_Unchecked" />
+                </StackPanel>
+            </Grid>
+        </toolkit:SettingsCard>
+
         <!-- ============================ 立即操作 ============================ -->
         <toolkit:SettingsCard
             Description="整理与同步互斥：同步进行中整理会排队，绝不并发搬同一批文件"

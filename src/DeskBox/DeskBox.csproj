@@ -237,6 +237,12 @@
          CitySearchService; the SDK wildcard Content copy is dead weight in
          every package -->
     <Content Remove="Assets\Cities\cities.json" />
+    <Content Include="version.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\自动更新.ps1">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Assets\deskbox.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

@@ -24,6 +24,7 @@ public sealed partial class CompanionSettingsSection : UserControl
     private readonly List<(string Id, string Dir)> _categories = new();
 
     private bool _statusBusy;
+    private bool _updateUiReady;
     private bool _settingsLoaded;
     private bool _categoriesLoaded;
 
@@ -41,6 +42,7 @@ public sealed partial class CompanionSettingsSection : UserControl
 
         Loaded += async (_, _) =>
         {
+            RefreshUpdateUi();
             await RefreshStatusAsync();
             await LoadCategoriesAsync();
             await RefreshPlanAsync();
@@ -48,6 +50,97 @@ public sealed partial class CompanionSettingsSection : UserControl
             await RefreshPendingAsync();
             await RefreshProposalsAsync();
         };
+    }
+
+    // ----------------------------------------------------------------- update
+
+    /// <summary>
+    /// Reflects the nutstore update channel: what is installed, whether the
+    /// synced folder offers something newer, and whether the boot-time check is
+    /// registered as a scheduled task.
+    /// </summary>
+    private void RefreshUpdateUi()
+    {
+        _updateUiReady = false;
+        try
+        {
+            UpdateVersionValue.Text = "v" + LocalUpdateChannel.CurrentVersion;
+
+            LocalUpdateChannel.UpdateStatus status = LocalUpdateChannel.Check();
+            UpdateStateValue.Text = status.Message;
+
+            string? lastRun = LocalUpdateChannel.LastLogLine();
+            if (!string.IsNullOrEmpty(lastRun))
+            {
+                UpdateStateValue.Text += "\n上次自动检查：" + lastRun;
+            }
+
+            AutoUpdateCheckBox.IsChecked = LocalUpdateChannel.IsAutoUpdateEnabled();
+        }
+        catch (Exception ex)
+        {
+            UpdateStateValue.Text = "读取更新状态失败：" + ex.Message;
+        }
+        finally
+        {
+            _updateUiReady = true;
+        }
+    }
+
+    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateNowButton.IsEnabled = false;
+        try
+        {
+            UpdateStateValue.Text = "正在检查…";
+            LocalUpdateChannel.UpdateStatus status = LocalUpdateChannel.Check();
+            if (!status.UpdateAvailable)
+            {
+                UpdateStateValue.Text = status.Message;
+                return;
+            }
+
+            UpdateStateValue.Text = "正在安装 " + status.RemoteVersion + "…程序会自动重启";
+            string output = await LocalUpdateChannel.RunWorkerAsync();
+            UpdateStateValue.Text = output;
+            RefreshUpdateUi();
+        }
+        catch (Exception ex)
+        {
+            UpdateStateValue.Text = "更新失败：" + ex.Message;
+        }
+        finally
+        {
+            UpdateNowButton.IsEnabled = true;
+        }
+    }
+
+    private void AutoUpdateCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!_updateUiReady)
+        {
+            return;
+        }
+
+        (bool ok, string message) = LocalUpdateChannel.SetAutoUpdateEnabled(true);
+        UpdateStateValue.Text = message;
+        if (!ok)
+        {
+            _updateUiReady = false;
+            AutoUpdateCheckBox.IsChecked = false;
+            _updateUiReady = true;
+        }
+    }
+
+    private void AutoUpdateCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (!_updateUiReady)
+        {
+            return;
+        }
+
+        (bool _, string message) = LocalUpdateChannel.SetAutoUpdateEnabled(false);
+        UpdateStateValue.Text = message;
     }
 
     // ---------------------------------------------------------------- status
