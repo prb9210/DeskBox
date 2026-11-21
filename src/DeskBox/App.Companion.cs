@@ -128,7 +128,7 @@ public partial class App
         }
 
         var stale = new List<string>();
-        foreach (WidgetConfig widget in SettingsService.Settings.Widgets)
+        foreach (WidgetConfig widget in SettingsService.Settings.WidgetLayout.Widgets)
         {
             string? mapped = widget.MappedFolderPath;
             if (string.IsNullOrWhiteSpace(mapped))
@@ -168,7 +168,7 @@ public partial class App
     private bool HasWidgetForPath(string folderPath)
     {
         string target = folderPath.TrimEnd('\\');
-        foreach (WidgetConfig widget in SettingsService.Settings.Widgets)
+        foreach (WidgetConfig widget in SettingsService.Settings.WidgetLayout.Widgets)
         {
             string? mapped = widget.MappedFolderPath;
             if (!string.IsNullOrWhiteSpace(mapped) &&
@@ -184,7 +184,7 @@ public partial class App
     private bool HasAnyCompanionWidget(string library)
     {
         string root = library.TrimEnd('\\') + "\\";
-        foreach (WidgetConfig widget in SettingsService.Settings.Widgets)
+        foreach (WidgetConfig widget in SettingsService.Settings.WidgetLayout.Widgets)
         {
             string? mapped = widget.MappedFolderPath;
             if (!string.IsNullOrWhiteSpace(mapped) &&
