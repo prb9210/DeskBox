@@ -170,6 +170,31 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         ApplyScale();
+        ApplyCircularWindowRegion();
+    }
+
+    /// <summary>Clips the window to a circle so the ball is round even when the
+    /// system backdrop fails to go transparent (WinUI 3 has no per-pixel alpha,
+    /// and TransparentTintBackdrop flakes on Win11 at 150%).</summary>
+    private void ApplyCircularWindowRegion()
+    {
+        try
+        {
+            IntPtr hWnd = WindowNative.GetWindowHandle(this);
+            if (hWnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            AppWindow appWindow = GetAppWindow();
+            int diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * _scale);
+            IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter, diameter);
+            Win32Helper.SetWindowRgn(hWnd, region, true);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] circular region failed: {ex.Message}");
+        }
     }
 
     private void ApplyScale()
@@ -340,6 +365,7 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         Animate(FanCanvas, expanded ? 1 : 0);
+        ApplyCircularWindowRegion();
     }
 
     // ------------------------------------------------------------- appearance
