@@ -36,8 +36,8 @@ public sealed partial class WidgetDrawerWindow : Window
     private const double BallDiameter = 56;
     private const double ClosedSize = 64;
 
-    private const double FanInner = 66;
-    private const double FanOuter = 214;
+    private const double FanInner = 44;
+    private const double FanOuter = 210;
     private const double FanGapDegrees = 2.5;
 
     private const int ScreenMargin = 18;
@@ -100,6 +100,15 @@ public sealed partial class WidgetDrawerWindow : Window
             }
 
             AppBranding.ApplyWindowIcon(appWindow);
+
+            // Windows 11 draws a 1px outline (and rounds corners) around any
+            // top-level window, which showed up as a grey rectangle floating on
+            // the desktop. This window is a shape, not a window: kill both.
+            IntPtr hWnd = WindowNative.GetWindowHandle(this);
+            int noBorder = -2; // DWMWA_COLOR_NONE
+            Win32Helper.TrySetDwmWindowAttribute(hWnd, Win32Helper.DWMWA_BORDER_COLOR, ref noBorder);
+            int doNotRound = 1; // DWMWCP_DONOTROUND
+            Win32Helper.TrySetDwmWindowAttribute(hWnd, Win32Helper.DWMWA_WINDOW_CORNER_PREFERENCE, ref doNotRound);
         }
         catch (Exception ex)
         {
@@ -147,8 +156,11 @@ public sealed partial class WidgetDrawerWindow : Window
         Canvas.SetLeft(BallRing, SceneCenter - 31);
         Canvas.SetTop(BallRing, SceneCenter - 31);
 
-        SceneShift.X = _expanded ? 0 : -(SceneCenter - (ClosedSize / 2));
-        SceneShift.Y = SceneShift.X;
+        // No translation: the scene is always centred on the ball, and the
+        // window size alone decides how much of it is on screen. Translating it
+        // was what pushed the ball off-centre.
+        SceneShift.X = 0;
+        SceneShift.Y = 0;
     }
 
     private SizeInt32 WindowSizePixels() => new(

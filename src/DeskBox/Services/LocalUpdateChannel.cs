@@ -293,7 +293,10 @@ public static class LocalUpdateChannel
                 return (true, "已开启：登录时检查一次，之后每 2 小时检查一次。");
             }
 
-            return (false, ("注册计划任务失败：" + out1 + " " + out2).Trim());
+            // schtasks writes GBK into a pipe, which arrives here as mojibake;
+            // report the exit codes instead of echoing unreadable bytes.
+            App.Log($"[Update] schtasks create failed: logon={code1} timer={code2} {out1} {out2}".Trim());
+            return (false, $"注册计划任务失败（代码 {code1}/{code2}）。可稍后重试，或用管理员身份运行一次 DeskBox。");
         }
 
         RunSchtasks("/Delete /TN \"" + TaskNameLogon + "\" /F");
