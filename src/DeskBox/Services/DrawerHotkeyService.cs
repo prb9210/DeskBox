@@ -24,7 +24,7 @@ internal sealed class DrawerHotkeyService : IDisposable
     private static readonly UIntPtr SubclassId = new(0x0D5B);
 
     private readonly Action _onPressed;
-    private readonly SubclassProc _subclassProc;
+    private readonly Win32Helper.SubclassProc _subclassProc;
 
     private IntPtr _windowHandle = IntPtr.Zero;
     private bool _subclassInstalled;
