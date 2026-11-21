@@ -7,12 +7,11 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <!-- No fixed sizes anywhere: the ball is placed from the window's real
-         client size in code, so DPI scaling cannot push it off the frame. -->
+    <!-- Nothing is positioned by XAML alignment: the code places the ball at
+         the centre of the real client area, so DPI scaling cannot shift it. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
-        DoubleTapped="RootGrid_DoubleTapped"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited"
         PointerMoved="RootGrid_PointerMoved"
@@ -23,48 +22,35 @@
         <Canvas x:Name="FanCanvas" />
 
         <Canvas x:Name="BallLayer">
-            <!-- Outer glow ring -->
-            <Border
+            <!-- A ring plus an ellipse: a corner radius on a Border gets
+                 mis-proportioned under DPI scaling and renders as a square
+                 with clipped corners, an ellipse is always a circle. -->
+            <Ellipse
                 x:Name="BallRing"
-                Width="64"
-                Height="64"
-                CornerRadius="32"
-                BorderThickness="1"
-                Background="{x:Null}"
-                IsHitTestVisible="False" />
+                Width="66"
+                Height="66"
+                IsHitTestVisible="False"
+                StrokeThickness="1" />
 
-            <!-- The bead -->
-            <Border
-                x:Name="Ball"
-                Width="56"
-                Height="56"
-                CornerRadius="28"
-                BorderThickness="1.2">
-                <Grid>
-                    <TextBlock
-                        x:Name="BallGlyph"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontFamily="Microsoft YaHei UI"
-                        FontSize="17"
-                        FontWeight="SemiBold"
-                        Foreground="White"
-                        IsHitTestVisible="False"
-                        Text="格" />
-                    <Border
-                        x:Name="StateDot"
-                        Width="9"
-                        Height="9"
-                        Margin="0,0,4,4"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Bottom"
-                        Background="White"
-                        BorderBrush="#33000000"
-                        BorderThickness="1"
-                        CornerRadius="4.5"
-                        Visibility="Collapsed" />
-                </Grid>
-            </Border>
+            <Ellipse x:Name="Ball" Width="56" Height="56" IsHitTestVisible="False" />
+
+            <TextBlock
+                x:Name="BallGlyph"
+                FontFamily="Microsoft YaHei UI"
+                FontSize="17"
+                FontWeight="SemiBold"
+                Foreground="White"
+                IsHitTestVisible="False"
+                Text="格" />
+
+            <Ellipse
+                x:Name="StateDot"
+                Width="9"
+                Height="9"
+                Fill="White"
+                Stroke="#33000000"
+                StrokeThickness="1"
+                Visibility="Collapsed" />
         </Canvas>
     </Grid>
 </Window>

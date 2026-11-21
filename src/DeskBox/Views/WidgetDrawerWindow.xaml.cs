@@ -208,8 +208,15 @@ public sealed partial class WidgetDrawerWindow : Window
 
         Canvas.SetLeft(Ball, _centerX - (BallDiameter / 2));
         Canvas.SetTop(Ball, _centerY - (BallDiameter / 2));
-        Canvas.SetLeft(BallRing, _centerX - 32);
-        Canvas.SetTop(BallRing, _centerY - 32);
+        Canvas.SetLeft(BallRing, _centerX - 33);
+        Canvas.SetTop(BallRing, _centerY - 33);
+
+        BallGlyph.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(BallGlyph, _centerX - (BallGlyph.DesiredSize.Width / 2));
+        Canvas.SetTop(BallGlyph, _centerY - (BallGlyph.DesiredSize.Height / 2));
+
+        Canvas.SetLeft(StateDot, _centerX + 12);
+        Canvas.SetTop(StateDot, _centerY + 12);
     }
 
     private SizeInt32 WindowSizePixels(double diameterDip)
@@ -280,6 +287,16 @@ public sealed partial class WidgetDrawerWindow : Window
         Activate();
     }
 
+    /// <summary>Ball centre in screen pixels, derived from what the window
+    /// actually is right now. Using ClosedSize here while the window was
+    /// expanded is what made the bead creep up-left on every click.</summary>
+    private PointInt32 BallCenterPixels(AppWindow appWindow)
+    {
+        PointInt32 position = appWindow.Position;
+        SizeInt32 size = appWindow.Size;
+        return new PointInt32(position.X + (size.Width / 2), position.Y + (size.Height / 2));
+    }
+
     private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
 
     private void SetExpanded(bool expanded)
@@ -290,9 +307,9 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         AppWindow appWindow = GetAppWindow();
-        PointInt32 current = appWindow.Position;
-        int ballCenterX = current.X + (int)Math.Round((ClosedSize / 2) * _scale);
-        int ballCenterY = current.Y + (int)Math.Round((ClosedSize / 2) * _scale);
+        PointInt32 center = BallCenterPixels(appWindow);
+        int ballCenterX = center.X;
+        int ballCenterY = center.Y;
 
         _expanded = expanded;
         double diameter = expanded ? ExpandedDiameterDip() : ClosedSize;
@@ -328,10 +345,10 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private void ApplyColor()
     {
-        Ball.Background = new SolidColorBrush(Color.FromArgb(255, 59, 130, 246));
+        Ball.Fill = new SolidColorBrush(Color.FromArgb(255, 59, 130, 246));
 
         DrawerColorPreset preset = ResolvePreset();
-        Ball.Background = new LinearGradientBrush
+        Ball.Fill = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0.25, 0.05),
             EndPoint = new Windows.Foundation.Point(0.75, 0.95),
@@ -343,8 +360,9 @@ public sealed partial class WidgetDrawerWindow : Window
         };
 
         Color rim = ParseColor(preset.Rim);
-        Ball.BorderBrush = new SolidColorBrush(Color.FromArgb(190, rim.R, rim.G, rim.B));
-        BallRing.BorderBrush = new SolidColorBrush(Color.FromArgb(70, rim.R, rim.G, rim.B));
+        BallRing.Stroke = new SolidColorBrush(Color.FromArgb(70, rim.R, rim.G, rim.B));
+        Ball.Stroke = new SolidColorBrush(Color.FromArgb(190, rim.R, rim.G, rim.B));
+        Ball.StrokeThickness = 1.4;
     }
 
     private DrawerColorPreset ResolvePreset()
@@ -582,17 +600,6 @@ public sealed partial class WidgetDrawerWindow : Window
 
     // ---------------------------------------------------------------- pointer
 
-    private void RootGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        if (Application.Current is not App app)
-        {
-            return;
-        }
-
-        app.OpenCompanionPanelFromDrawer();
-        e.Handled = true;
-    }
-
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         if (!_expanded)
@@ -613,6 +620,13 @@ public sealed partial class WidgetDrawerWindow : Window
     {
         if (_expanded)
         {
+            // A press that started on a sector must reach the sector's own tap
+            // handler; only presses on empty space close the ring.
+            if (IsSectorSource(e.OriginalSource))
+            {
+                return;
+            }
+
             SetExpanded(false);
             e.Handled = true;
             return;
@@ -630,6 +644,23 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             _pressWindowOrigin = new PointInt32(0, 0);
         }
+    }
+
+    private static bool IsSectorSource(object? source)
+    {
+        DependencyObject? node = source as DependencyObject;
+        int guard = 0;
+        while (node is not null && guard++ < 12)
+        {
+            if (node is XamlPath path && path.Tag is string)
+            {
+                return true;
+            }
+
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return false;
     }
 
     private void RootGrid_PointerMoved(object sender, PointerRoutedEventArgs e)
