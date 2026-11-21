@@ -36,8 +36,8 @@ public sealed partial class WidgetDrawerWindow : Window
     private const double BallDiameter = 56;
     private const double ClosedSize = 64;
 
-    private const double FanInner = 60;
-    private const double FanOuter = 206;
+    private const double FanInner = 66;
+    private const double FanOuter = 214;
     private const double FanGapDegrees = 2.5;
 
     private const int ScreenMargin = 18;
@@ -395,6 +395,34 @@ public sealed partial class WidgetDrawerWindow : Window
             FanCanvas.Children.Add(sector);
             AddSectorLabel(mid, name, visible);
         }
+
+        // Outer rim highlight: the reference fan is closed by a single light arc,
+        // which is what stops it from looking like loose wedges.
+        var rim = new XamlPath
+        {
+            Data = BuildOuterArc(direction - 90, direction + 90 - FanGapDegrees),
+            Stroke = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+            StrokeThickness = 1.2,
+            IsHitTestVisible = false
+        };
+        FanCanvas.Children.Add(rim);
+    }
+
+    private static Geometry BuildOuterArc(double a0, double a1)
+    {
+        var figure = new PathFigure { StartPoint = PointAt(FanOuter, a0), IsClosed = false, IsFilled = false };
+        bool large = Math.Abs(a1 - a0) > 180;
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = PointAt(FanOuter, a1),
+            Size = new Windows.Foundation.Size(FanOuter, FanOuter),
+            IsLargeArc = large,
+            SweepDirection = SweepDirection.Clockwise
+        });
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
     }
 
     private void AddSectorLabel(double degrees, string text, bool visible)
@@ -434,9 +462,9 @@ public sealed partial class WidgetDrawerWindow : Window
     private Brush BuildSectorBrush(double directionDegrees, bool visible)
     {
         DrawerColorPreset preset = ResolvePreset();
-        Color inner = ParseColor(preset.Start);
-        Color outer = ParseColor(preset.End);
-        byte alpha = visible ? (byte)236 : (byte)140;
+        Color inner = Shade(ParseColor(preset.Start), 0.72);
+        Color outer = Shade(ParseColor(preset.End), 0.46);
+        byte alpha = visible ? (byte)248 : (byte)150;
 
         // Gradient runs along the fan direction: light at the inner edge, deep at
         // the rim — the same read as the reference fan.
@@ -454,6 +482,17 @@ public sealed partial class WidgetDrawerWindow : Window
                 new GradientStop { Color = Color.FromArgb(alpha, outer.R, outer.G, outer.B), Offset = 1 }
             }
         };
+    }
+
+    /// <summary>Darkens a colour toward the reference fan: sectors read as deep
+    /// glass, not as bright paint.</summary>
+    private static Color Shade(Color color, double factor)
+    {
+        return Color.FromArgb(
+            color.A,
+            (byte)Math.Clamp(color.R * factor, 0, 255),
+            (byte)Math.Clamp(color.G * factor, 0, 255),
+            (byte)Math.Clamp(color.B * factor, 0, 255));
     }
 
     private static Geometry BuildSector(double a0, double a1)
