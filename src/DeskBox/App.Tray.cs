@@ -60,6 +60,36 @@ public partial class App
             companionPanelItem,
             () => RunTraySettingsActionAsync(contextMenu, OpenCompanionPanelFromTray));
 
+        var drawerItem = new MenuFlyoutItem
+        {
+            Text = "格子抽屉（悬浮球）",
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE700" }
+        };
+        AttachTrayMenuItemInteraction(
+            drawerItem,
+            () => RunTraySettingsActionAsync(contextMenu, ShowWidgetDrawer));
+
+        var hideAllWidgetsItem = new MenuFlyoutItem
+        {
+            Text = "收起全部格子",
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE7C4" }
+        };
+        AttachTrayMenuItemInteraction(
+            hideAllWidgetsItem,
+            () => RunTrayMenuActionAsync(contextMenu, () => SetAllWidgetsVisibleAsync(false)));
+
+        var showAllWidgetsItem = new MenuFlyoutItem
+        {
+            Text = "呼出全部格子",
+            Width = TrayMenuItemWidth,
+            Icon = new FontIcon { Glyph = "\uE7C5" }
+        };
+        AttachTrayMenuItemInteraction(
+            showAllWidgetsItem,
+            () => RunTrayMenuActionAsync(contextMenu, () => SetAllWidgetsVisibleAsync(true)));
+
         var mapFolderItem = new MenuFlyoutItem
         {
             Text = localization.T("Common.NewFolderMapping"),
@@ -126,6 +156,9 @@ public partial class App
         _trayCreateWidgetItems.Clear();
         contextMenu.Items.Add(organizeDesktopItem);
         contextMenu.Items.Add(companionPanelItem);
+        contextMenu.Items.Add(drawerItem);
+        contextMenu.Items.Add(showAllWidgetsItem);
+        contextMenu.Items.Add(hideAllWidgetsItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
         foreach (var descriptor in new WidgetContentFactory(LocalizationService).GetCreateEntryDescriptors())
         {

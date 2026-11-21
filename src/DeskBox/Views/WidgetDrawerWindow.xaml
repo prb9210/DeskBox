@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="DeskBox.Views.WidgetDrawerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid" Background="Transparent">
+        <Button
+            x:Name="DrawerButton"
+            Padding="0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            AutomationProperties.Name="格子抽屉：点一下收起或呼出全部格子"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            Click="DrawerButton_Click"
+            CornerRadius="18"
+            RightTapped="DrawerButton_RightTapped">
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="2">
+                <FontIcon FontSize="20" Glyph="&#xE700;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="11"
+                    Text="格子" />
+            </StackPanel>
+        </Button>
+    </Grid>
+</Window>

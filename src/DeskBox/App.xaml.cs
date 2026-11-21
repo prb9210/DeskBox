@@ -1577,6 +1577,7 @@ public partial class App : Application
             }
 
             RunOptionalStartupStep("global-hotkey-service", () => InitializeGlobalHotkeyService(localizationService));
+            RunOptionalStartupStep("widget-drawer", ShowWidgetDrawerOnStartup);
             RunOptionalStartupStep("shell-context-menu-prewarm", ScheduleShellContextMenuPrewarm);
             // Settings-host IPC server: must exist before any second-process
             // settings host tries to connect (batch 3c).
