@@ -60,6 +60,17 @@ public sealed partial class WidgetDrawerWindow : Window
 
         ApplyColor();
         LayoutScene();
+
+        var escape = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
+        escape.Invoked += (_, args) =>
+        {
+            if (_expanded)
+            {
+                SetExpanded(false);
+                args.Handled = true;
+            }
+        };
+        RootGrid.KeyboardAccelerators.Add(escape);
         ApplyChrome();
         RootGrid.Loaded += (_, _) => UpdateStateDot();
     }
@@ -396,6 +407,21 @@ public sealed partial class WidgetDrawerWindow : Window
                 Tag = id
             };
 
+            var restingFill = sector.Fill;
+            var hoverFill = BuildSectorBrush(direction, true, hovered: true);
+            sector.PointerEntered += (_, _) =>
+            {
+                sector.Fill = hoverFill;
+                sector.Stroke = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255));
+                sector.StrokeThickness = 1.4;
+            };
+            sector.PointerExited += (_, _) =>
+            {
+                sector.Fill = restingFill;
+                sector.Stroke = new SolidColorBrush(Color.FromArgb(56, 255, 255, 255));
+                sector.StrokeThickness = 1;
+            };
+
             string widgetId = id;
             sector.Tapped += async (_, args) =>
             {
@@ -471,12 +497,12 @@ public sealed partial class WidgetDrawerWindow : Window
         FanCanvas.Children.Add(dot);
     }
 
-    private Brush BuildSectorBrush(double directionDegrees, bool visible)
+    private Brush BuildSectorBrush(double directionDegrees, bool visible, bool hovered = false)
     {
         DrawerColorPreset preset = ResolvePreset();
-        Color inner = Shade(ParseColor(preset.Start), 0.72);
-        Color outer = Shade(ParseColor(preset.End), 0.46);
-        byte alpha = visible ? (byte)248 : (byte)150;
+        Color inner = Shade(ParseColor(preset.Start), hovered ? 1.05 : 0.72);
+        Color outer = Shade(ParseColor(preset.End), hovered ? 0.72 : 0.46);
+        byte alpha = hovered ? (byte)255 : visible ? (byte)248 : (byte)150;
 
         // Gradient runs along the fan direction: light at the inner edge, deep at
         // the rim — the same read as the reference fan.
