@@ -211,7 +211,7 @@ public static class LocalUpdateChannel
                 null,
                 null,
                 false,
-                "没找到更新文件夹（坚果云里应有一个「DeskBox更新」目录，里面有 manifest.json）");
+                "本机没有同步来的更新文件夹；点「立即检查并更新」会走云端通道（GitHub 发布）检查");
         }
 
         bool newer;
