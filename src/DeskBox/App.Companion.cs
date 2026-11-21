@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DeskBox.Models;
 using DeskBox.Services;
+using DeskBox.Views;
 using Microsoft.UI.Dispatching;
 
 namespace DeskBox;
@@ -24,6 +25,42 @@ public partial class App
     {
         CompanionProcessHost.StartIfPresent();
         TryQueueCompanionLibraryWidgets();
+    }
+
+    private CompanionPanelWindow? _companionPanelWindow;
+
+    /// <summary>
+    /// Opens the in-app organizer panel (status + 立即整理/同步/备份 + 同步周期),
+    /// so the engine's web dashboard is optional rather than the only way in.
+    /// </summary>
+    public void ShowCompanionPanelWindow()
+    {
+        CancelBackgroundMemoryCleanup();
+        if (_companionPanelWindow is null)
+        {
+            var window = new CompanionPanelWindow();
+            _companionPanelWindow = window;
+            ThemeService.TrackWindow(window);
+            window.Closed += CompanionPanelWindow_Closed;
+        }
+
+        _companionPanelWindow.ShowWindow();
+    }
+
+    private void CompanionPanelWindow_Closed(object sender, Microsoft.UI.Xaml.WindowEventArgs args)
+    {
+        if (sender is not CompanionPanelWindow window)
+        {
+            return;
+        }
+
+        window.Closed -= CompanionPanelWindow_Closed;
+        if (ReferenceEquals(_companionPanelWindow, window))
+        {
+            _companionPanelWindow = null;
+        }
+
+        ScheduleLightMemoryCleanup(completedHeavyOperation: false);
     }
 
     /// <summary>

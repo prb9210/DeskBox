@@ -50,6 +50,16 @@ public partial class App
                 contextMenu,
                 OpenDesktopOrganizationFromTray));
 
+        var companionPanelItem = new MenuFlyoutItem
+        {
+            Text = "桌面管家面板",
+            Width = TrayMenuItemWidth,
+            Icon = new SymbolIcon(Symbol.Setting)
+        };
+        AttachTrayMenuItemInteraction(
+            companionPanelItem,
+            () => RunTraySettingsActionAsync(contextMenu, OpenCompanionPanelFromTray));
+
         var mapFolderItem = new MenuFlyoutItem
         {
             Text = localization.T("Common.NewFolderMapping"),
@@ -115,6 +125,7 @@ public partial class App
 
         _trayCreateWidgetItems.Clear();
         contextMenu.Items.Add(organizeDesktopItem);
+        contextMenu.Items.Add(companionPanelItem);
         contextMenu.Items.Add(new MenuFlyoutSeparator());
         foreach (var descriptor in new WidgetContentFactory(LocalizationService).GetCreateEntryDescriptors())
         {
@@ -1502,6 +1513,12 @@ public partial class App
     {
         CancelBackgroundMemoryCleanup();
         ShowDesktopOrganizationWindow();
+    }
+
+    private void OpenCompanionPanelFromTray()
+    {
+        CancelBackgroundMemoryCleanup();
+        ShowCompanionPanelWindow();
     }
 
     private void OpenAboutSettingsFromTray()

@@ -39,6 +39,21 @@
             </toolkit:SettingsCard>
 
             <toolkit:SettingsCard
+                Description="查看状态、立即整理 / 同步 / 备份、改同步周期，都在这里，不用打开浏览器"
+                Header="桌面管家（自动分类与同步）"
+                HorizontalContentAlignment="Right">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE713;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <Button Click="CompanionPanelButton_Click" Style="{StaticResource AccentActionButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="16" Glyph="&#xE713;" />
+                        <TextBlock Text="打开管家面板" />
+                    </StackPanel>
+                </Button>
+            </toolkit:SettingsCard>
+
+            <toolkit:SettingsCard
                 Click="NestedSettingsButton_Click"
                 IsClickEnabled="True"
                 Tag="FileDisplaySettings"

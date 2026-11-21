@@ -116,4 +116,17 @@ public sealed partial class FileWidgetSettingsSection : UserControl
     {
         AppActions?.ShowDesktopOrganizationWindow();
     }
+
+    /// <summary>
+    /// Opens the organizer panel from 设置. Deliberately goes through App
+    /// directly: adding a member to ISettingsAppActions would break every
+    /// test double that implements it.
+    /// </summary>
+    private void CompanionPanelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (Microsoft.UI.Xaml.Application.Current is App app)
+        {
+            app.ShowCompanionPanelWindow();
+        }
+    }
 }
