@@ -142,6 +142,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
             "src/DeskBox/Services/WeatherService.cs",
             "src/DeskBox/Services/WidgetFileStackSettings.cs",
             "src/DeskBox/Services/WidgetLayoutStore.cs",
+            "src/DeskBox/Services/WidgetDrawerSettings.cs",
             "src/DeskBox/Services/WidgetTitleIconAssetStore.cs",
             "src/DeskBox/Services/WindowsCrashEventCollector.cs",
             "src/DeskBox/Sync/SyncJsonContext.cs"
@@ -154,7 +155,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
             .Order()
             .ToArray();
 
-        Assert.Equal(38, actualContextOwners.Length);
+        Assert.Equal(39, actualContextOwners.Length);
         Assert.Equal(expectedContextOwners, actualContextOwners);
     }
 
