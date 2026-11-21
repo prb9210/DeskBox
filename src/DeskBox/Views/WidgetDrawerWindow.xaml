@@ -5,14 +5,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        The window is the ball: 68 DIP, clipped to a circle by an elliptic window
-        region. Content must bleed to the edges, otherwise the window's own black
-        background shows through the clip (that was the "black octagon").
+        One scene, two states. Closed, the window is 64 DIP and the ball fills
+        it; open, the same scene is shown at 460 DIP with the fan drawn around
+        the ball, which stays pinned to the canvas centre. The scene is
+        translated (not rebuilt) when switching, so the ball never jumps.
+
+        The window uses a transparent system backdrop: with a black backdrop any
+        pixel we do not paint would show as a black hole through the circle.
     -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
-        DoubleTapped="RootGrid_DoubleTapped"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited"
         PointerMoved="RootGrid_PointerMoved"
@@ -20,31 +23,58 @@
         PointerReleased="RootGrid_PointerReleased"
         RightTapped="RootGrid_RightTapped">
 
-        <Border
-            x:Name="Ball"
-            BorderThickness="1.5"
-            CornerRadius="34"
-            Opacity="0.5">
-            <Grid>
-                <TextBlock
-                    x:Name="BallGlyph"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    FontSize="19"
-                    FontWeight="SemiBold"
-                    Foreground="White"
-                    Text="格" />
-                <Border
-                    x:Name="StateDot"
-                    Width="9"
-                    Height="9"
-                    Margin="0,0,9,9"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Bottom"
-                    Background="White"
-                    CornerRadius="4.5"
-                    Visibility="Collapsed" />
-            </Grid>
-        </Border>
+        <Canvas
+            x:Name="Scene"
+            Width="460"
+            Height="460"
+            Background="{x:Null}">
+            <Canvas.RenderTransform>
+                <TranslateTransform x:Name="SceneShift" X="0" Y="0" />
+            </Canvas.RenderTransform>
+
+            <Canvas
+                x:Name="FanCanvas"
+                Width="460"
+                Height="460"
+                Background="{x:Null}"
+                Opacity="0" />
+
+            <Border
+                x:Name="BallRing"
+                Width="62"
+                Height="62"
+                BorderBrush="#2EFFFFFF"
+                BorderThickness="1"
+                CornerRadius="31"
+                IsHitTestVisible="False" />
+
+            <Border
+                x:Name="Ball"
+                Width="56"
+                Height="56"
+                BorderThickness="1.2"
+                CornerRadius="28">
+                <Grid>
+                    <TextBlock
+                        x:Name="BallGlyph"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="19"
+                        FontWeight="SemiBold"
+                        Foreground="White"
+                        Text="格" />
+                    <Border
+                        x:Name="StateDot"
+                        Width="8"
+                        Height="8"
+                        Margin="0,0,9,9"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Background="White"
+                        CornerRadius="4"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Border>
+        </Canvas>
     </Grid>
 </Window>

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 using DeskBox.Helpers;
 using DeskBox.Platform;
 using DeskBox.Services;
@@ -12,43 +12,44 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
+using Microsoft.UI.Xaml.Shapes;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
+using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
 
 namespace DeskBox.Views;
 
 /// <summary>
-/// The desktop drawer: a 56px glass bead in a corner of the screen. Clicking it
-/// fans out one sector per widget; a sector toggles that single widget, so the
-/// user can keep the weather and the diary out and park the rest.
+/// The desktop drawer: a glass bead that fans the widgets out around itself.
 ///
-/// Two rendering rules make or break the look:
-///   * the window IS the ball — content bleeds to the edges, because the window
-///     region is an ellipse and any margin lets the black HWND background show;
-///   * every size is multiplied by the monitor scale, because AppWindow.Resize
-///     takes physical pixels while the XAML tree is laid out in DIPs.
+/// Geometry mirrors the reference implementation (ClassFlow / MathBoard): inner
+/// radius 60, outer 206, sectors on a 180° arc pointing from the ball toward the
+/// middle of the screen, 2.5° gaps, labels at mid radius. Closed state is the
+/// same scene translated so only the 64 DIP ball is on screen; that keeps one
+/// visual tree for both states and stops the ball from jumping when it opens.
 /// </summary>
 public sealed partial class WidgetDrawerWindow : Window
 {
-    private const int BallDip = 56;
+    private const double SceneSize = 460;
+    private const double SceneCenter = SceneSize / 2;
+    private const double BallDiameter = 56;
+    private const double ClosedSize = 64;
+
+    private const double FanInner = 60;
+    private const double FanOuter = 206;
+    private const double FanGapDegrees = 2.5;
+
     private const int ScreenMargin = 18;
     private const int EdgeSnapDistance = 110;
-    private const double IdleOpacity = 0.5;
-    private const double HoverOpacity = 0.95;
-
-    private const double FanCanvasSize = 340;
-    private const double FanInner = 44;
-    private const double FanOuter = 148;
 
     private readonly WidgetDrawerSettings _settings;
 
+    private bool _expanded;
     private bool _pointerDown;
     private bool _dragging;
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
-    private Flyout? _fan;
     private double _scale = 1.0;
 
     public WidgetDrawerWindow(WidgetDrawerSettings settings)
@@ -58,6 +59,7 @@ public sealed partial class WidgetDrawerWindow : Window
         Title = "格子抽屉";
 
         ApplyColor();
+        LayoutScene();
         ApplyChrome();
         RootGrid.Loaded += (_, _) => UpdateStateDot();
     }
@@ -83,6 +85,8 @@ public sealed partial class WidgetDrawerWindow : Window
         return AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hWnd));
     }
 
+    // ------------------------------------------------------------------ chrome
+
     private void ApplyChrome()
     {
         try
@@ -102,21 +106,21 @@ public sealed partial class WidgetDrawerWindow : Window
             App.Log($"[Drawer] chrome setup failed: {ex.Message}");
         }
 
-        // No backdrop: the region clip supplies the silhouette, and the ball
-        // border paints every pixel inside it.
+        // Per-pixel transparency: without it every unpainted pixel of the scene
+        // is black, which is exactly the "black shape with a frame" artifact.
         try
         {
-            SystemBackdrop = null;
+            SystemBackdrop = new TransparentTintBackdrop();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Older builds may not support clearing the backdrop.
+            App.Log($"[Drawer] transparent backdrop unavailable: {ex.Message}");
+            SystemBackdrop = null;
         }
 
         ApplyScale();
     }
 
-    /// <summary>Sizes the HWND to the ball in physical pixels and re-clips it.</summary>
     private void ApplyScale()
     {
         try
@@ -132,59 +136,111 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             _scale = 1.0;
         }
+    }
 
-        int pixels = (int)Math.Round(BallDip * _scale);
+    /// <summary>Places the ball at the scene centre and translates the scene for
+    /// the current state.</summary>
+    private void LayoutScene()
+    {
+        Canvas.SetLeft(Ball, SceneCenter - (BallDiameter / 2));
+        Canvas.SetTop(Ball, SceneCenter - (BallDiameter / 2));
+        Canvas.SetLeft(BallRing, SceneCenter - 31);
+        Canvas.SetTop(BallRing, SceneCenter - 31);
+
+        SceneShift.X = _expanded ? 0 : -(SceneCenter - (ClosedSize / 2));
+        SceneShift.Y = SceneShift.X;
+    }
+
+    private SizeInt32 WindowSizePixels() => new(
+        (int)Math.Round((_expanded ? SceneSize : ClosedSize) * _scale),
+        (int)Math.Round((_expanded ? SceneSize : ClosedSize) * _scale));
+
+    public void ShowAtSavedSpot()
+    {
+        ApplyScale();
+
+        AppWindow appWindow = GetAppWindow();
+        RectInt32 work = DisplayArea
+            .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
+            .WorkArea;
+
+        int size = (int)Math.Round(ClosedSize * _scale);
+        int margin = (int)Math.Round(ScreenMargin * _scale);
+
+        int x = work.X + work.Width - size - margin;
+        int y = work.Y + work.Height - size - margin;
+
+        if (_settings.X is double savedX && _settings.Y is double savedY)
+        {
+            x = Clamp((int)savedX, work.X, work.X + work.Width - size);
+            y = Clamp((int)savedY, work.Y, work.Y + work.Height - size);
+        }
+
         try
         {
-            GetAppWindow().Resize(new SizeInt32(pixels, pixels));
+            appWindow.Resize(WindowSizePixels());
+            appWindow.Move(new PointInt32(x, y));
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] positioning failed: {ex.Message}");
+        }
+
+        Activate();
+    }
+
+    private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
+
+    /// <summary>Grows/shrinks the window around the ball centre.</summary>
+    private void SetExpanded(bool expanded)
+    {
+        if (_expanded == expanded)
+        {
+            return;
+        }
+
+        AppWindow appWindow = GetAppWindow();
+        PointInt32 current = appWindow.Position;
+        int ballCenterX = current.X + (int)Math.Round((ClosedSize / 2) * _scale);
+        int ballCenterY = current.Y + (int)Math.Round((ClosedSize / 2) * _scale);
+
+        _expanded = expanded;
+        LayoutScene();
+
+        SizeInt32 size = WindowSizePixels();
+        int half = size.Width / 2;
+        try
+        {
+            appWindow.Resize(size);
+            appWindow.Move(new PointInt32(ballCenterX - half, ballCenterY - half));
         }
         catch (Exception ex)
         {
             App.Log($"[Drawer] resize failed: {ex.Message}");
         }
 
-        ClipToCircle(pixels);
-    }
-
-    /// <summary>Elliptic window region → a genuine circle on any backdrop.</summary>
-    private void ClipToCircle(int pixels)
-    {
-        try
+        if (expanded)
         {
-            IntPtr hWnd = WindowNative.GetWindowHandle(this);
-            int diameter = Math.Max(16, pixels);
-            IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter + 1, diameter + 1);
-            if (region == IntPtr.Zero)
-            {
-                return;
-            }
-
-            if (Win32Helper.SetWindowRgn(hWnd, region, true) == 0)
-            {
-                Win32Helper.DeleteObject(region);
-            }
+            BuildFan();
         }
-        catch (Exception ex)
+        else
         {
-            App.Log($"[Drawer] circular clip failed: {ex.Message}");
+            FanCanvas.Children.Clear();
         }
+
+        AnimateFan(expanded ? 1 : 0);
     }
 
     // ------------------------------------------------------------- appearance
 
     private void ApplyColor()
     {
-        DrawerColorPreset preset = _settings.ResolveColor();
-        if (preset.Id == WidgetDrawerSettings.FollowThemeId)
-        {
-            bool light = Application.Current.RequestedTheme == ApplicationTheme.Light;
-            preset = WidgetDrawerSettings.Find(light ? "blue" : "cyan") ?? WidgetDrawerSettings.Presets[0];
-        }
+        DrawerColorPreset preset = ResolvePreset();
 
         Ball.Background = new LinearGradientBrush
         {
-            StartPoint = new Windows.Foundation.Point(0.12, 0.0),
-            EndPoint = new Windows.Foundation.Point(0.88, 1.0),
+            StartPoint = new Windows.Foundation.Point(0.25, 0.05),
+            EndPoint = new Windows.Foundation.Point(0.75, 0.95),
             GradientStops =
             {
                 new GradientStop { Color = ParseColor(preset.Start), Offset = 0 },
@@ -193,16 +249,29 @@ public sealed partial class WidgetDrawerWindow : Window
         };
 
         Color rim = ParseColor(preset.Rim);
-        Ball.BorderBrush = new SolidColorBrush(Color.FromArgb(200, rim.R, rim.G, rim.B));
+        Ball.BorderBrush = new SolidColorBrush(Color.FromArgb(190, rim.R, rim.G, rim.B));
+        BallRing.BorderBrush = new SolidColorBrush(Color.FromArgb(70, rim.R, rim.G, rim.B));
+    }
+
+    private DrawerColorPreset ResolvePreset()
+    {
+        DrawerColorPreset preset = _settings.ResolveColor();
+        if (preset.Id != WidgetDrawerSettings.FollowThemeId)
+        {
+            return preset;
+        }
+
+        bool light = Application.Current.RequestedTheme == ApplicationTheme.Light;
+        return WidgetDrawerSettings.Find(light ? "blue" : "cyan") ?? WidgetDrawerSettings.Presets[0];
     }
 
     private static Color ParseColor(string hex)
     {
         string value = hex.TrimStart('#');
         if (value.Length == 6 &&
-            byte.TryParse(value.Substring(0, 2), System.Globalization.NumberStyles.HexNumber, null, out byte r) &&
-            byte.TryParse(value.Substring(2, 2), System.Globalization.NumberStyles.HexNumber, null, out byte g) &&
-            byte.TryParse(value.Substring(4, 2), System.Globalization.NumberStyles.HexNumber, null, out byte b))
+            byte.TryParse(value.Substring(0, 2), NumberStyles.HexNumber, null, out byte r) &&
+            byte.TryParse(value.Substring(2, 2), NumberStyles.HexNumber, null, out byte g) &&
+            byte.TryParse(value.Substring(4, 2), NumberStyles.HexNumber, null, out byte b))
         {
             return Color.FromArgb(255, r, g, b);
         }
@@ -221,6 +290,228 @@ public sealed partial class WidgetDrawerWindow : Window
     {
         ApplyColor();
         UpdateStateDot();
+        if (_expanded)
+        {
+            BuildFan();
+        }
+    }
+
+    private void AnimateFan(double to)
+    {
+        try
+        {
+            var storyboard = new Storyboard();
+            var fade = new DoubleAnimation
+            {
+                To = to,
+                Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+                EnableDependentAnimation = true
+            };
+            Storyboard.SetTarget(fade, FanCanvas);
+            Storyboard.SetTargetProperty(fade, "Opacity");
+            storyboard.Children.Add(fade);
+            storyboard.Begin();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] fan fade failed: {ex.Message}");
+        }
+    }
+
+    // -------------------------------------------------------------------- fan
+
+    /// <summary>Direction the fan opens: from the ball toward the screen centre,
+    /// snapped to 45° so it always looks deliberate.</summary>
+    private double FanDirection()
+    {
+        try
+        {
+            AppWindow appWindow = GetAppWindow();
+            RectInt32 work = DisplayArea
+                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
+                .WorkArea;
+            PointInt32 position = appWindow.Position;
+            int half = (int)Math.Round((SceneSize / 2) * _scale);
+
+            double dx = (work.X + (work.Width / 2.0)) - (position.X + half);
+            double dy = (work.Y + (work.Height / 2.0)) - (position.Y + half);
+            if (Math.Abs(dx) < 1 && Math.Abs(dy) < 1)
+            {
+                return -90;
+            }
+
+            double degrees = Math.Atan2(dy, dx) * 180 / Math.PI;
+            return Math.Round(degrees / 45.0) * 45.0;
+        }
+        catch (Exception)
+        {
+            return -90;
+        }
+    }
+
+    private void BuildFan()
+    {
+        FanCanvas.Children.Clear();
+        if (Application.Current is not App app)
+        {
+            return;
+        }
+
+        IReadOnlyList<(string Id, string Name, bool Visible)> states = app.DrawerWidgetStates();
+        if (states.Count == 0)
+        {
+            return;
+        }
+
+        double direction = FanDirection();
+        int count = states.Count;
+        double step = 180.0 / count;
+        double span = Math.Max(10, step - FanGapDegrees);
+
+        for (int i = 0; i < count; i++)
+        {
+            (string id, string name, bool visible) = states[i];
+            double mid = direction - 90 + (step * (i + 0.5));
+            double start = mid - (span / 2);
+            double end = mid + (span / 2);
+
+            var sector = new XamlPath
+            {
+                Data = BuildSector(start, end),
+                Fill = BuildSectorBrush(direction, visible),
+                Stroke = new SolidColorBrush(Color.FromArgb(56, 255, 255, 255)),
+                StrokeThickness = 1,
+                Tag = id
+            };
+
+            string widgetId = id;
+            sector.Tapped += async (_, args) =>
+            {
+                args.Handled = true;
+                await app.ToggleWidgetAsync(widgetId);
+                BuildFan();
+            };
+
+            FanCanvas.Children.Add(sector);
+            AddSectorLabel(mid, name, visible);
+        }
+    }
+
+    private void AddSectorLabel(double degrees, string text, bool visible)
+    {
+        double radius = (FanInner + FanOuter) / 2;
+        double rad = degrees * Math.PI / 180;
+
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)190, 255, 255, 255)),
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            Width = 78,
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(label, SceneCenter + (radius * Math.Cos(rad)) - 39);
+        Canvas.SetTop(label, SceneCenter + (radius * Math.Sin(rad)) - 8);
+        FanCanvas.Children.Add(label);
+
+        var dot = new Border
+        {
+            Width = 6,
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
+            Background = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)90, 255, 255, 255)),
+            IsHitTestVisible = false
+        };
+        Canvas.SetLeft(dot, SceneCenter + (radius * Math.Cos(rad)) - 3);
+        Canvas.SetTop(dot, SceneCenter + (radius * Math.Sin(rad)) + 10);
+        FanCanvas.Children.Add(dot);
+    }
+
+    private Brush BuildSectorBrush(double directionDegrees, bool visible)
+    {
+        DrawerColorPreset preset = ResolvePreset();
+        Color inner = ParseColor(preset.Start);
+        Color outer = ParseColor(preset.End);
+        byte alpha = visible ? (byte)236 : (byte)140;
+
+        // Gradient runs along the fan direction: light at the inner edge, deep at
+        // the rim — the same read as the reference fan.
+        double rad = directionDegrees * Math.PI / 180;
+        double cx = Math.Cos(rad) / 2;
+        double cy = Math.Sin(rad) / 2;
+
+        return new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0.5 - cx, 0.5 - cy),
+            EndPoint = new Windows.Foundation.Point(0.5 + cx, 0.5 + cy),
+            GradientStops =
+            {
+                new GradientStop { Color = Color.FromArgb(alpha, inner.R, inner.G, inner.B), Offset = 0 },
+                new GradientStop { Color = Color.FromArgb(alpha, outer.R, outer.G, outer.B), Offset = 1 }
+            }
+        };
+    }
+
+    private static Geometry BuildSector(double a0, double a1)
+    {
+        Windows.Foundation.Point innerStart = PointAt(FanInner, a0);
+        Windows.Foundation.Point outerStart = PointAt(FanOuter, a0);
+        Windows.Foundation.Point outerEnd = PointAt(FanOuter, a1);
+        Windows.Foundation.Point innerEnd = PointAt(FanInner, a1);
+
+        var figure = new PathFigure
+        {
+            StartPoint = innerStart,
+            IsClosed = true,
+            IsFilled = true
+        };
+        figure.Segments.Add(new LineSegment { Point = outerStart });
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = outerEnd,
+            Size = new Windows.Foundation.Size(FanOuter, FanOuter),
+            IsLargeArc = false,
+            SweepDirection = SweepDirection.Clockwise
+        });
+        figure.Segments.Add(new LineSegment { Point = innerEnd });
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = innerStart,
+            Size = new Windows.Foundation.Size(FanInner, FanInner),
+            IsLargeArc = false,
+            SweepDirection = SweepDirection.Clockwise
+        });
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        return geometry;
+    }
+
+    private static Windows.Foundation.Point PointAt(double radius, double degrees)
+    {
+        double rad = degrees * Math.PI / 180;
+        return new Windows.Foundation.Point(
+            SceneCenter + (radius * Math.Cos(rad)),
+            SceneCenter + (radius * Math.Sin(rad)));
+    }
+
+    // ---------------------------------------------------------------- pointer
+
+    private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        AnimateBallOpacity(1.0);
+    }
+
+    private void RootGrid_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging && !_expanded)
+        {
+            AnimateBallOpacity(0.55);
+        }
     }
 
     private void AnimateBallOpacity(double to)
@@ -241,319 +532,21 @@ public sealed partial class WidgetDrawerWindow : Window
         }
         catch (Exception ex)
         {
-            App.Log($"[Drawer] fade failed: {ex.Message}");
-        }
-    }
-
-    // ---------------------------------------------------------------- position
-
-    public void ShowAtSavedSpot()
-    {
-        ApplyScale();
-
-        AppWindow appWindow = GetAppWindow();
-        RectInt32 work = DisplayArea
-            .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
-            .WorkArea;
-
-        int size = (int)Math.Round(BallDip * _scale);
-        int margin = (int)Math.Round(ScreenMargin * _scale);
-
-        int x = work.X + work.Width - size - margin;
-        int y = work.Y + work.Height - size - margin;
-
-        if (_settings.X is double savedX && _settings.Y is double savedY)
-        {
-            x = Clamp((int)savedX, work.X, work.X + work.Width - size);
-            y = Clamp((int)savedY, work.Y, work.Y + work.Height - size);
-        }
-
-        try
-        {
-            appWindow.Move(new PointInt32(x, y));
-        }
-        catch (Exception ex)
-        {
-            App.Log($"[Drawer] positioning failed: {ex.Message}");
-        }
-
-        Activate();
-    }
-
-    private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
-
-    private void SnapAndPersistPosition()
-    {
-        try
-        {
-            AppWindow appWindow = GetAppWindow();
-            RectInt32 work = DisplayArea
-                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
-                .WorkArea;
-            PointInt32 current = appWindow.Position;
-            int size = (int)Math.Round(BallDip * _scale);
-            int margin = (int)Math.Round(ScreenMargin * _scale);
-            int x = current.X;
-            int y = current.Y;
-
-            if (current.X - work.X < EdgeSnapDistance)
-            {
-                x = work.X + margin;
-            }
-            else if (work.X + work.Width - (current.X + size) < EdgeSnapDistance)
-            {
-                x = work.X + work.Width - size - margin;
-            }
-
-            if (current.Y - work.Y < EdgeSnapDistance)
-            {
-                y = work.Y + margin;
-            }
-            else if (work.Y + work.Height - (current.Y + size) < EdgeSnapDistance)
-            {
-                y = work.Y + work.Height - size - margin;
-            }
-
-            appWindow.Move(new PointInt32(x, y));
-            _settings.X = x;
-            _settings.Y = y;
-            _settings.Save();
-        }
-        catch (Exception ex)
-        {
-            App.Log($"[Drawer] snap failed: {ex.Message}");
-        }
-    }
-
-    // ------------------------------------------------------------------ fan
-
-    /// <summary>Fans one sector per widget, opening away from the nearest edge.</summary>
-    private async void ToggleFanAsync()
-    {
-        if (_fan is not null)
-        {
-            _fan.Hide();
-            _fan = null;
-            return;
-        }
-
-        if (Application.Current is not App app)
-        {
-            return;
-        }
-
-        bool openUpward = IsInLowerHalf();
-
-        var canvas = new Canvas
-        {
-            Width = FanCanvasSize,
-            Height = FanCanvasSize,
-            Background = new SolidColorBrush(Colors.Transparent)
-        };
-
-        IReadOnlyList<(string Id, string Name, bool Visible)> states = app.DrawerWidgetStates();
-        int count = states.Count;
-        if (count == 0)
-        {
-            return;
-        }
-
-        double center = FanCanvasSize / 2;
-        double baseAngle = openUpward ? -90 : 90;
-        double step = 180.0 / count;
-        double span = Math.Max(8, step - 3);
-
-        for (int i = 0; i < count; i++)
-        {
-            (string id, string name, bool visible) = states[i];
-            double mid = baseAngle - 90 + step * (i + 0.5);
-            double a0 = mid - span / 2;
-            double a1 = mid + span / 2;
-
-            var sector = new XamlPath
-            {
-                Data = BuildSector(center, FanInner, FanOuter, a0, a1),
-                Fill = BuildSectorBrush(visible),
-                Stroke = new SolidColorBrush(Color.FromArgb(visible ? (byte)90 : (byte)45, 255, 255, 255)),
-                StrokeThickness = 1
-            };
-
-            string widgetId = id;
-            sector.Tapped += async (_, args) =>
-            {
-                args.Handled = true;
-                await app.ToggleWidgetAsync(widgetId);
-                if (_fan is not null)
-                {
-                    _fan.Hide();
-                    _fan = null;
-                    ToggleFanAsync();
-                }
-            };
-
-            canvas.Children.Add(sector);
-
-            double labelRadius = (FanInner + FanOuter) / 2;
-            double rad = mid * Math.PI / 180;
-            var label = new TextBlock
-            {
-                Text = name,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Colors.White),
-                TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.NoWrap,
-                Width = 62,
-                IsHitTestVisible = false
-            };
-
-            Canvas.SetLeft(label, center + labelRadius * Math.Cos(rad) - 31);
-            Canvas.SetTop(label, center + labelRadius * Math.Sin(rad) - 9);
-            canvas.Children.Add(label);
-
-            if (visible)
-            {
-                var dot = new Border
-                {
-                    Width = 6,
-                    Height = 6,
-                    CornerRadius = new CornerRadius(3),
-                    Background = new SolidColorBrush(Colors.White),
-                    IsHitTestVisible = false,
-                    Opacity = 0.85
-                };
-                Canvas.SetLeft(dot, center + labelRadius * Math.Cos(rad) - 3);
-                Canvas.SetTop(dot, center + labelRadius * Math.Sin(rad) + 8);
-                canvas.Children.Add(dot);
-            }
-        }
-
-        var flyout = new Flyout
-        {
-            Placement = openUpward ? FlyoutPlacementMode.Top : FlyoutPlacementMode.Bottom,
-            ShouldConstrainToRootBounds = false,
-            Content = canvas
-        };
-
-        try
-        {
-            var style = new Style(typeof(FlyoutPresenter));
-            style.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Colors.Transparent)));
-            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 0.0));
-            style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 0.0));
-            flyout.FlyoutPresenterStyle = style;
-        }
-        catch (Exception ex)
-        {
-            App.Log($"[Drawer] fan style failed: {ex.Message}");
-        }
-
-        flyout.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_fan, flyout))
-            {
-                _fan = null;
-            }
-        };
-
-        _fan = flyout;
-        flyout.ShowAt(RootGrid);
-        await System.Threading.Tasks.Task.CompletedTask;
-    }
-
-    private bool IsInLowerHalf()
-    {
-        try
-        {
-            AppWindow appWindow = GetAppWindow();
-            RectInt32 work = DisplayArea
-                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
-                .WorkArea;
-            return appWindow.Position.Y + (BallDip * _scale) / 2 > work.Y + work.Height / 2;
-        }
-        catch (Exception)
-        {
-            return true;
-        }
-    }
-
-    private static Geometry BuildSector(double center, double inner, double outer, double a0, double a1)
-    {
-        Windows.Foundation.Point InnerStart = PointAt(center, inner, a0);
-        Windows.Foundation.Point OuterStart = PointAt(center, outer, a0);
-        Windows.Foundation.Point OuterEnd = PointAt(center, outer, a1);
-        Windows.Foundation.Point InnerEnd = PointAt(center, inner, a1);
-
-        var figure = new PathFigure
-        {
-            StartPoint = InnerStart,
-            IsClosed = true,
-            IsFilled = true
-        };
-        figure.Segments.Add(new LineSegment { Point = OuterStart });
-        figure.Segments.Add(new ArcSegment
-        {
-            Point = OuterEnd,
-            Size = new Windows.Foundation.Size(outer, outer),
-            IsLargeArc = false,
-            SweepDirection = SweepDirection.Clockwise
-        });
-        figure.Segments.Add(new LineSegment { Point = InnerEnd });
-        figure.Segments.Add(new ArcSegment
-        {
-            Point = InnerStart,
-            Size = new Windows.Foundation.Size(inner, inner),
-            IsLargeArc = false,
-            SweepDirection = SweepDirection.Counterclockwise
-        });
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        return geometry;
-    }
-
-    private static Windows.Foundation.Point PointAt(double center, double radius, double degrees)
-    {
-        double rad = degrees * Math.PI / 180;
-        return new Windows.Foundation.Point(center + radius * Math.Cos(rad), center + radius * Math.Sin(rad));
-    }
-
-    private Brush BuildSectorBrush(bool visible)
-    {
-        DrawerColorPreset preset = _settings.ResolveColor();
-        if (preset.Id == WidgetDrawerSettings.FollowThemeId)
-        {
-            bool light = Application.Current.RequestedTheme == ApplicationTheme.Light;
-            preset = WidgetDrawerSettings.Find(light ? "blue" : "cyan") ?? WidgetDrawerSettings.Presets[0];
-        }
-
-        Color start = ParseColor(preset.Start);
-        Color end = ParseColor(preset.End);
-        byte alpha = visible ? (byte)235 : (byte)90;
-
-        return new SolidColorBrush(visible
-            ? Color.FromArgb(alpha, start.R, start.G, start.B)
-            : Color.FromArgb(alpha, end.R, end.G, end.B));
-    }
-
-    // ----------------------------------------------------------------- pointer
-
-    private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
-    {
-        AnimateBallOpacity(HoverOpacity);
-    }
-
-    private void RootGrid_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_dragging)
-        {
-            AnimateBallOpacity(IdleOpacity);
+            App.Log($"[Drawer] ball fade failed: {ex.Message}");
         }
     }
 
     private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // A press while the fan is open means "close it": the fan canvas covers
+        // the whole scene, so anything reaching this handler is empty space.
+        if (_expanded)
+        {
+            SetExpanded(false);
+            e.Handled = true;
+            return;
+        }
+
         RootGrid.CapturePointer(e.Pointer);
         _pointerDown = true;
         _dragging = false;
@@ -605,18 +598,54 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             _dragging = false;
             SnapAndPersistPosition();
-            AnimateBallOpacity(HoverOpacity);
+            AnimateBallOpacity(1.0);
             return;
         }
 
-        ToggleFanAsync();
+        SetExpanded(true);
+        AnimateBallOpacity(1.0);
     }
 
-    private void RootGrid_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    private void SnapAndPersistPosition()
     {
-        if (Application.Current is App app)
+        try
         {
-            app.OpenCompanionPanelFromDrawer();
+            AppWindow appWindow = GetAppWindow();
+            RectInt32 work = DisplayArea
+                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
+                .WorkArea;
+            PointInt32 current = appWindow.Position;
+            int size = (int)Math.Round(ClosedSize * _scale);
+            int margin = (int)Math.Round(ScreenMargin * _scale);
+            int x = current.X;
+            int y = current.Y;
+
+            if (current.X - work.X < EdgeSnapDistance)
+            {
+                x = work.X + margin;
+            }
+            else if (work.X + work.Width - (current.X + size) < EdgeSnapDistance)
+            {
+                x = work.X + work.Width - size - margin;
+            }
+
+            if (current.Y - work.Y < EdgeSnapDistance)
+            {
+                y = work.Y + margin;
+            }
+            else if (work.Y + work.Height - (current.Y + size) < EdgeSnapDistance)
+            {
+                y = work.Y + work.Height - size - margin;
+            }
+
+            appWindow.Move(new PointInt32(x, y));
+            _settings.X = x;
+            _settings.Y = y;
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] snap failed: {ex.Message}");
         }
     }
 
@@ -629,11 +658,7 @@ public sealed partial class WidgetDrawerWindow : Window
             return;
         }
 
-        if (_fan is not null)
-        {
-            _fan.Hide();
-            _fan = null;
-        }
+        SetExpanded(false);
 
         var flyout = new MenuFlyout { ShouldConstrainToRootBounds = false };
 
@@ -665,6 +690,11 @@ public sealed partial class WidgetDrawerWindow : Window
                 _settings.Color = captured.Id;
                 _settings.Save();
                 ApplyColor();
+                if (_expanded)
+                {
+                    BuildFan();
+                }
+
                 app.RefreshDrawerAppearance();
             };
             colors.Items.Add(item);
