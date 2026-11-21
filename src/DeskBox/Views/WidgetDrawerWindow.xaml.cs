@@ -62,6 +62,19 @@ public sealed partial class WidgetDrawerWindow : Window
         InitializeComponent();
         Title = "格子抽屉";
 
+        // Extend content over the whole frame BEFORE anything is measured: without
+        // this WinUI keeps a title-bar strip and DWM paints the window frame,
+        // which is what showed up on the desktop as a hollow white rectangle.
+        try
+        {
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(null);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] extend-into-titlebar failed: {ex.Message}");
+        }
+
         ApplyColor();
         LayoutScene();
         ApplyChrome();
@@ -290,6 +303,10 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private void ApplyColor()
     {
+        // Fallback first, so a failure below still leaves a visible bead instead
+        // of an empty (invisible) window.
+        Ball.Background = new SolidColorBrush(Color.FromArgb(255, 59, 130, 246));
+
         DrawerColorPreset preset = ResolvePreset();
 
         Ball.Background = new LinearGradientBrush
