@@ -27,6 +27,33 @@ public partial class App
     internal IReadOnlyList<(string Id, string Name)> DrawerWidgetChoices() =>
         WidgetManager?.DrawerWidgetChoices() ?? Array.Empty<(string Id, string Name)>();
 
+    internal IReadOnlyList<(string Id, string Name, bool Visible)> DrawerWidgetStates() =>
+        WidgetManager?.WidgetStates() ?? Array.Empty<(string Id, string Name, bool Visible)>();
+
+    /// <summary>Fan sector click: flip one widget between shown and parked.</summary>
+    internal async Task ToggleWidgetAsync(string widgetId)
+    {
+        bool visible = false;
+        foreach ((string id, string name, bool isVisible) in DrawerWidgetStates())
+        {
+            if (string.Equals(id, widgetId, StringComparison.Ordinal))
+            {
+                visible = isVisible;
+                _ = name;
+                break;
+            }
+        }
+
+        if (visible)
+        {
+            await CollapseWidgetAsync(widgetId);
+        }
+        else
+        {
+            await ExpandWidgetAsync(widgetId);
+        }
+    }
+
     /// <summary>Shows the floating drawer (created on first use).</summary>
     internal void ShowWidgetDrawer()
     {

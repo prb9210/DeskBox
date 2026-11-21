@@ -1438,6 +1438,26 @@ public sealed partial class WidgetManager
         return true;
     }
 
+    /// <summary>Every loaded widget with its live visibility, for the drawer fan.</summary>
+    public IReadOnlyList<(string Id, string Name, bool Visible)> WidgetStates()
+    {
+        var states = new List<(string, string, bool)>();
+        var windows = GetLoadedDesktopWindows();
+        foreach (WidgetConfig widget in _settingsService.Settings.Widgets)
+        {
+            if (!IsSessionCandidate(widget))
+            {
+                continue;
+            }
+
+            IDesktopWidgetWindow? window = windows.FirstOrDefault(candidate =>
+                string.Equals(candidate.Config.Id, widget.Id, StringComparison.Ordinal));
+            states.Add((widget.Id, widget.Name, window?.Visible == true));
+        }
+
+        return states;
+    }
+
     /// <summary>Widgets the drawer can park one by one, in settings order.</summary>
     public IReadOnlyList<(string Id, string Name)> DrawerWidgetChoices()
     {

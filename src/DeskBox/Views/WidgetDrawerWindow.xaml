@@ -4,6 +4,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!--
+        The window is the ball: 68 DIP, clipped to a circle by an elliptic window
+        region. Content must bleed to the edges, otherwise the window's own black
+        background shows through the clip (that was the "black octagon").
+    -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
@@ -17,35 +22,27 @@
 
         <Border
             x:Name="Ball"
-            Width="56"
-            Height="56"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            BorderThickness="1"
-            CornerRadius="28"
-            Opacity="0.45"
-            RenderTransformOrigin="0.5,0.5">
-            <Border.RenderTransform>
-                <ScaleTransform x:Name="BallScale" ScaleX="1" ScaleY="1" />
-            </Border.RenderTransform>
+            BorderThickness="1.5"
+            CornerRadius="34"
+            Opacity="0.5">
             <Grid>
                 <TextBlock
                     x:Name="BallGlyph"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    FontSize="20"
+                    FontSize="19"
                     FontWeight="SemiBold"
                     Foreground="White"
                     Text="格" />
                 <Border
                     x:Name="StateDot"
-                    Width="10"
-                    Height="10"
-                    Margin="0,0,7,7"
+                    Width="9"
+                    Height="9"
+                    Margin="0,0,9,9"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
                     Background="White"
-                    CornerRadius="5"
+                    CornerRadius="4.5"
                     Visibility="Collapsed" />
             </Grid>
         </Border>
