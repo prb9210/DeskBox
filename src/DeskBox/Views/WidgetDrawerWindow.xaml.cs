@@ -527,10 +527,17 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private void AddSectorLabel(double degrees, string text, bool visible)
     {
+        // Labels run along their own wedge (radially), so a long folder name can
+        // never spill over the neighbouring sector. The half on the left is
+        // rotated 180 more so the characters stay upright.
         double radius = (_fanInner + _fanOuter) / 2;
         double rad = degrees * Math.PI / 180;
         double x = _centerX + (radius * Math.Cos(rad));
         double y = _centerY + (radius * Math.Sin(rad));
+
+        double norm = ((degrees % 360) + 360) % 360;
+        bool flip = norm > 90 && norm < 270;
+        double span = Math.Max(56, (_fanOuter - _fanInner) - 16);
 
         var label = new TextBlock
         {
@@ -540,13 +547,20 @@ public sealed partial class WidgetDrawerWindow : Window
             Foreground = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)185, 255, 255, 255)),
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.NoWrap,
-            Width = 78,
-            IsHitTestVisible = false
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Width = span,
+            IsHitTestVisible = false,
+            RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5),
+            RenderTransform = new RotateTransform { Angle = flip ? degrees + 180 : degrees }
         };
 
-        Canvas.SetLeft(label, x - 39);
-        Canvas.SetTop(label, y - 8);
+        Canvas.SetLeft(label, x - (span / 2));
+        Canvas.SetTop(label, y - 9);
         FanCanvas.Children.Add(label);
+
+        double dotRadius = _fanOuter - 16;
+        double dotX = _centerX + (dotRadius * Math.Cos(rad));
+        double dotY = _centerY + (dotRadius * Math.Sin(rad));
 
         var dot = new Border
         {
@@ -556,8 +570,8 @@ public sealed partial class WidgetDrawerWindow : Window
             Background = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)80, 255, 255, 255)),
             IsHitTestVisible = false
         };
-        Canvas.SetLeft(dot, x - 3);
-        Canvas.SetTop(dot, y + 10);
+        Canvas.SetLeft(dot, dotX - 3);
+        Canvas.SetTop(dot, dotY - 3);
         FanCanvas.Children.Add(dot);
     }
 
