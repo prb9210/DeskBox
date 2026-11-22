@@ -101,6 +101,11 @@ public sealed partial class WidgetDrawerWindow : Window
             {
                 BuildFan();
             }
+
+            // 关键：窗口真正改变尺寸后必须重新裁圆。
+            // SetExpanded/ShowAtSavedSpot 里调 Resize 时 Size 还没生效，
+            // 那次裁出来的圆偏小 → 球被裁成"剩一部分"。这里用生效后的真实尺寸重裁。
+            ApplyCircularWindowRegion();
         };
     }
 
