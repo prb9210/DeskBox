@@ -65,9 +65,11 @@
             </Grid>
         </toolkit:SettingsCard>
 
-        <!-- ============================ 程序更新 ============================ -->
+        <!-- 更新入口统一放在「关于 → 升级通道」，这里只留一个隐藏占位，
+             等自动更新接好后再彻底删除（避免两个地方各有一套更新按钮）。 -->
         <toolkit:SettingsCard
-            Description="新版本通过坚果云同步过来，这里一键安装，不用再从微信下载压缩包"
+            Visibility="Collapsed"
+            Description="更新已统一到「关于 → 升级通道」"
             Header="程序更新"
             HorizontalContentAlignment="Stretch">
             <toolkit:SettingsCard.HeaderIcon>
