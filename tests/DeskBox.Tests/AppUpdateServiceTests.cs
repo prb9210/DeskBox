@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -118,9 +118,9 @@ public sealed class AppUpdateServiceTests : IDisposable
         };
 
         Assert.Equal(
-            "https://deskbox.fun/download",
+            AppUpdateService.DefaultManualDownloadUrl,
             SettingsViewModel.GetManualUpdateDownloadUrl(manifest));
-        Assert.Equal("https://deskbox.fun/download", SettingsViewModel.GetManualUpdateDownloadUrl(null));
+        Assert.Equal(AppUpdateService.DefaultManualDownloadUrl, SettingsViewModel.GetManualUpdateDownloadUrl(null));
     }
 
     [Theory]
@@ -145,7 +145,7 @@ public sealed class AppUpdateServiceTests : IDisposable
                 {
                   "ScHeMaVeRsIoN": "1",
                   "version": "1.2.2",
-                  "downloadUrl": "https://github.com/Tianyu199509/DeskBox/releases/download/v1.2.2/DeskBox_Setup_1.2.2_x64.exe",
+                  "downloadUrl": "https://github.com/prb9210/DeskBox/releases/download/v1.2.2/DeskBox_Setup_1.2.2_x64.exe",
                   "manualDownloadUrl": "https://pan.quark.cn/s/version-specific",
                   "sha256": "abc",
                   "SiZe": "1234",
@@ -189,12 +189,12 @@ public sealed class AppUpdateServiceTests : IDisposable
                     """
                     {
                       "tag_name": "v1.2.4",
-                      "html_url": "https://github.com/Tianyu199509/DeskBox/releases/tag/v1.2.4",
+                      "html_url": "https://github.com/prb9210/DeskBox/releases/tag/v1.2.4",
                       "body": "## Highlights\n- Improved update flow",
                       "assets": [
                         {
                           "name": "DeskBox_Setup_1.2.4_x64.exe",
-                          "browser_download_url": "https://github.com/Tianyu199509/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe",
+                          "browser_download_url": "https://github.com/prb9210/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe",
                           "size": 23423211,
                           "digest": "sha256:8ecb3092ae5bd6883f8a75bbea03d9800251e0c23fdbe1bf4d91fd3a62565561"
                         }
@@ -217,10 +217,10 @@ public sealed class AppUpdateServiceTests : IDisposable
         Assert.Equal(AppUpdateCheckStatus.UpdateAvailable, result.Status);
         Assert.NotNull(result.Manifest);
         Assert.Equal("1.2.4", result.Manifest.Version);
-        Assert.Equal("https://github.com/Tianyu199509/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe", result.Manifest.DownloadUrl);
+        Assert.Equal("https://github.com/prb9210/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe", result.Manifest.DownloadUrl);
         Assert.Equal("8ECB3092AE5BD6883F8A75BBEA03D9800251E0C23FDBE1BF4D91FD3A62565561", result.Manifest.Sha256);
         Assert.Equal(23423211, result.Manifest.Size);
-        Assert.Equal("https://github.com/Tianyu199509/DeskBox/releases/tag/v1.2.4", result.Manifest.ReleaseNotesUrl);
+        Assert.Equal("https://github.com/prb9210/DeskBox/releases/tag/v1.2.4", result.Manifest.ReleaseNotesUrl);
         Assert.Equal("## Highlights\n- Improved update flow", result.Manifest.GetReleaseNotesForLocale("en-US"));
     }
 
@@ -252,16 +252,16 @@ public sealed class AppUpdateServiceTests : IDisposable
                     """
                     {
                       "tag_name": "v1.2.4",
-                      "html_url": "https://github.com/Tianyu199509/DeskBox/releases/tag/v1.2.4",
+                      "html_url": "https://github.com/prb9210/DeskBox/releases/tag/v1.2.4",
                       "assets": [
                         {
                           "name": "DeskBox_Setup_1.2.4_x64.exe",
-                          "browser_download_url": "https://github.com/Tianyu199509/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe",
+                          "browser_download_url": "https://github.com/prb9210/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe",
                           "size": 23423211
                         },
                         {
                           "name": "DeskBox_Setup_1.2.4_x64.exe.sha256",
-                          "browser_download_url": "https://github.com/Tianyu199509/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe.sha256",
+                          "browser_download_url": "https://github.com/prb9210/DeskBox/releases/download/v1.2.4/DeskBox_Setup_1.2.4_x64.exe.sha256",
                           "size": 95
                         }
                       ]
@@ -423,7 +423,7 @@ public sealed class AppUpdateServiceTests : IDisposable
         // ms-windowsstore:// download target; the display path must accept a
         // manifest that has notes but no installer link at all.
         string notesOnlyJson =
-            """{"schemaVersion":1,"channel":"stable","version":"1.5.9","releaseNotesUrl":"https://github.com/Tianyu199509/DeskBox/releases/tag/v1.5.9"}""";
+            """{"schemaVersion":1,"channel":"stable","version":"1.5.9","releaseNotesUrl":"https://github.com/prb9210/DeskBox/releases/tag/v1.5.9"}""";
         string installerOnlyJson =
             """{"schemaVersion":1,"channel":"stable","version":"1.5.9","downloadUrl":"https://deskbox.fun/DeskBox_Setup.exe","sha256":"aa"}""";
 
@@ -453,7 +453,7 @@ public sealed class AppUpdateServiceTests : IDisposable
 
         Assert.Equal("1.5.9", manifest.Version);
         Assert.Equal(
-            "https://github.com/Tianyu199509/DeskBox/releases/tag/v1.5.9",
+            "https://github.com/prb9210/DeskBox/releases/tag/v1.5.9",
             manifest.ReleaseNotesUrl);
         Assert.True(AppUpdateManifest.IsSafeReleaseNotesUrl(manifest.ReleaseNotesUrl));
         Assert.True(manifest.HasReleaseNotesOrUrl);
@@ -491,13 +491,15 @@ public sealed class AppUpdateServiceTests : IDisposable
     [Theory]
     [InlineData("https://deskbox.fun/update/DeskBox_Setup.exe", true)]
     [InlineData("https://cdn.deskbox.fun/DeskBox_Setup.exe", true)]
-    [InlineData("https://github.com/Tianyu199509/DeskBox/releases/download/v1.5.2/DeskBox_Setup.exe", true)]
+    [InlineData("https://github.com/prb9210/DeskBox/releases/download/v1.5.2/DeskBox_Setup.exe", true)]
+    [InlineData("https://github.com/prb9210/DeskBox/releases/download/v1.5.21/DeskBox-1.5.21.zip", true)]
+    [InlineData("https://github.com/Tianyu199509/DeskBox/releases/download/v1.5.2/DeskBox_Setup.exe", false)]
     [InlineData("http://deskbox.fun/update/DeskBox_Setup.exe", false)]
     [InlineData("https://evil.example.com/DeskBox_Setup.exe", false)]
     [InlineData("https://deskbox.fun.evil.example.com/DeskBox_Setup.exe", false)]
     [InlineData("https://github.evil.example.com/DeskBox_Setup.exe", false)]
     [InlineData("https://github.com/attacker/evil/releases/download/v1.0.0/DeskBox_Setup.exe", false)]
-    [InlineData("https://github.com/Tianyu199509/DeskBox/blob/main/DeskBox_Setup.exe", false)]
+    [InlineData("https://github.com/prb9210/DeskBox/blob/main/DeskBox_Setup.exe", false)]
     [InlineData("https://objects.githubusercontent.com/some-asset-path", false)]
     public void IsManifestUsable_PinsTheInstallerOriginToTrustedHttpsHosts(
         string downloadUrl,

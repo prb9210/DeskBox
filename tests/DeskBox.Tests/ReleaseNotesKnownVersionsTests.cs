@@ -1,4 +1,4 @@
-using DeskBox.Services;
+﻿using DeskBox.Services;
 using Xunit;
 
 namespace DeskBox.Tests;
@@ -26,11 +26,13 @@ public sealed class ReleaseNotesKnownVersionsTests
     }
 
     [Fact]
-    public void KnownReleaseVersions_CoverCurrentAndPreviousRelease()
+    public void KnownReleaseVersions_CoverCurrentReleaseAndTheOldestLiveOne()
     {
+        // 当前版本必须在表里（NewestMatchesCurrentRelease 还要求它在第一位），
+        // 再挑一个本仓库确实发过的老版本兜底，防止整表被清空。
+        Assert.Contains(AppUpdateService.GetCurrentAppVersion(), ReleaseNotesService.KnownReleaseVersions);
+        Assert.Contains("1.5.2", ReleaseNotesService.KnownReleaseVersions);
         Assert.Contains("1.5.9", ReleaseNotesService.KnownReleaseVersions);
-        Assert.Contains("1.5.8", ReleaseNotesService.KnownReleaseVersions);
-        Assert.Contains("1.4.0", ReleaseNotesService.KnownReleaseVersions);
     }
 
     [Fact]
@@ -53,5 +55,9 @@ public sealed class ReleaseNotesKnownVersionsTests
         Assert.DoesNotContain("1.4.4", ReleaseNotesService.KnownReleaseVersions);
         Assert.DoesNotContain("1.4.5", ReleaseNotesService.KnownReleaseVersions);
         Assert.DoesNotContain("1.4.5-rc1", ReleaseNotesService.KnownReleaseVersions);
+        // 本项目（fork）没给这些版本发过 Release —— 与上游有 Release 的版本号不能混用。
+        Assert.DoesNotContain("1.4.0", ReleaseNotesService.KnownReleaseVersions);
+        Assert.DoesNotContain("1.5.1", ReleaseNotesService.KnownReleaseVersions);
+        Assert.DoesNotContain("1.5.4", ReleaseNotesService.KnownReleaseVersions);
     }
 }

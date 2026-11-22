@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -170,11 +170,13 @@ public sealed class ReleaseNotesService
     /// out because their notes cannot resolve. Append the new version at
     /// release time.
     /// </summary>
+    // 只列 prb9210/DeskBox 真正发过 Release 的版本：更新页的「发行说明」
+    // 是拿 tag 去本仓库取，列了没发过 Release 的版本只会点开 404。
+    // 发新版时把版本号插到最前面（KnownReleaseVersions_NewestMatchesCurrentRelease 会盯着）。
     public static readonly IReadOnlyList<string> KnownReleaseVersions =
     [
-        "1.5.9", "1.5.8", "1.5.7", "1.5.6", "1.5.5", "1.5.4", "1.5.3", "1.5.2",
-        "1.5.1", "1.5.0", "1.4.9", "1.4.8", "1.4.7", "1.4.6", "1.4.3", "1.4.2",
-        "1.4.1", "1.4.0",
+        "1.5.22", "1.5.21", "1.5.20", "1.5.18", "1.5.17", "1.5.15", "1.5.12", "1.5.10",
+        "1.5.9", "1.5.8", "1.5.7", "1.5.6", "1.5.5", "1.5.3", "1.5.2",
     ];
 
     internal static Uri GetContentSourceUri(string releaseNotesUrl)
