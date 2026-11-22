@@ -206,19 +206,26 @@ public sealed partial class WidgetDrawerWindow : Window
                 scale = 1.0;
             }
 
-            int diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * scale);
-            if (diameter > 0 && size.Width > 0 && size.Height > 0)
+            // 以"球的圆心"为圆心裁圆，而不是锚定窗口左上角 (0,0)。
+            // 窗口因标题栏/DPI 舍入常不是严格正方形，用 min(宽,高) 当直径
+            // 且从 (0,0) 起画，圆心就跑到 (min/2, min/2)，与球心偏离——
+            // 表现就是"球只剩下一部分"。两者必须同心。
+            int centerX = size.Width / 2;
+            int centerY = size.Height / 2;
+            int radius = (int)Math.Round(((_expanded ? ExpandedDiameterDip() : ClosedSize) / 2) * scale);
+            if (radius <= 0)
             {
-                // 绝不裁得比窗口本身还大，也不裁成 0（0 = 整个窗口不可见）。
-                diameter = Math.Min(diameter, Math.Min(size.Width, size.Height));
+                radius = Math.Min(centerX, centerY);
             }
+            radius = Math.Min(radius, Math.Min(centerX, centerY));
+            int diameter = radius * 2;
             if (diameter <= 0)
             {
                 App.Log($"[Drawer] region skipped: win={size.Width}x{size.Height} dip={dipWidth}");
                 return;
             }
 
-            IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter, diameter);
+            IntPtr region = Win32Helper.CreateEllipticRgn(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
             int rgnResult = Win32Helper.SetWindowRgn(hWnd, region, true);
             bool ok = rgnResult != 0;
             App.Log($"[Drawer] region d={diameter} win={size.Width}x{size.Height} dip={dipWidth:0.##} scale={scale:0.##} ok={ok}");
