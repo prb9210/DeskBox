@@ -191,14 +191,31 @@ public sealed partial class WidgetDrawerWindow : Window
             // 用窗口真实像素尺寸算圆，而不是 DIP × _scale：
             // 150% 缩放下 _scale 在首次布局时可能还是 1.0，裁出来的圆比球小，
             // 绿球就被切掉一条边（用户看到"不是正圆"的真正原因）。
+            // 用"窗口真实像素宽 ÷ 根容器 DIP 宽"反推当前缩放，
+            // 不依赖 _scale（首次布局时它可能还是 1.0，会把圆裁小、切掉一条边）。
             var size = appWindow.Size;
-            int diameter = Math.Min(size.Width, size.Height);
+            double dipWidth = RootGrid.ActualWidth;
+            double scale = (dipWidth > 0 && size.Width > 0) ? size.Width / dipWidth : _scale;
+            if (scale <= 0)
+            {
+                scale = 1.0;
+            }
+
+            int diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * scale);
+            if (diameter > 0 && size.Width > 0 && size.Height > 0)
+            {
+                // 绝不裁得比窗口本身还大，也不裁成 0（0 = 整个窗口不可见）。
+                diameter = Math.Min(diameter, Math.Min(size.Width, size.Height));
+            }
             if (diameter <= 0)
             {
-                diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * _scale);
+                App.Log($"[Drawer] region skipped: win={size.Width}x{size.Height} dip={dipWidth}");
+                return;
             }
+
             IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter, diameter);
-            Win32Helper.SetWindowRgn(hWnd, region, true);
+            bool ok = Win32Helper.SetWindowRgn(hWnd, region, true);
+            App.Log($"[Drawer] region d={diameter} win={size.Width}x{size.Height} dip={dipWidth:0.##} scale={scale:0.##} ok={ok}");
         }
         catch (Exception ex)
         {
