@@ -34,8 +34,13 @@ public sealed partial class WidgetDrawerWindow : Window
     private const double ClosedSize = 64;
     private const double WindowPadding = 14;
 
-    private const double MaxFanOuter = 208;
-    private const double MinFanOuter = 132;
+    // 扇形几何与窗口尺寸解耦（照 ClassFlow 的 RadialMenu：半径是常量、
+    // 圆心固定在画布正中）。窗口装不下时整块等比缩放，绝不再按窗口重算半径
+    // —— 重算 + 边缘钳制会把环拉成非圆/偏心，扇片就变成一条条斜片。
+    private const double FanInner = 44;
+    private const double FanOuter = 132;
+    private const double ExpandedSize = (FanOuter + WindowPadding) * 2; // 292 DIP
+    private const double MinExpandedSize = 190;
     private const double FanGapDegrees = 2.2;
 
     private const int ScreenMargin = 18;
@@ -57,7 +62,7 @@ public sealed partial class WidgetDrawerWindow : Window
     private double _centerX = ClosedSize / 2;
     private double _centerY = ClosedSize / 2;
     private double _fanInner = 44;
-    private double _fanOuter = MaxFanOuter;
+    private double _fanOuter = FanOuter;
 
     public WidgetDrawerWindow(WidgetDrawerSettings settings)
     {
@@ -184,9 +189,9 @@ public sealed partial class WidgetDrawerWindow : Window
     /// 圆不圆只跟「收起状态」有关：收起时把窗口裁成内切圆，球一定是完整的圆。
     ///
     /// 展开时**一律不裁**。扇形的外径是 (窗口/2 - WindowPadding)，比内切圆还大；
-    /// 只要裁切半径不是从「窗口真实像素」算出来（早前几版用 DIP×_scale、
-    /// 用 ExpandedDiameterDip 复算），圆就会比扇形小或偏心，把扇片切成
-    /// 一条条斜片 —— 用户看到的「展开后是很奇怪的形状」就是它。
+    /// 只要裁切半径不是从「窗口真实像素」算出来（早前几版用 DIP×_scale 或
+    /// 按屏幕边缘重算直径），圆就会比扇形小或偏心，把扇片切成一条条斜片
+    /// —— 用户看到的「展开后是很奇怪的形状」就是它。
     /// </summary>
     private void ApplyWindowClip()
     {
@@ -255,39 +260,38 @@ public sealed partial class WidgetDrawerWindow : Window
         }
     }
 
-    /// <summary>Places the ball at the centre of the real client area.</summary>
+    /// <summary>球放在窗口真实中心；扇形画在固定坐标里再等比缩放。</summary>
     private void Relayout()
     {
-        // Never read ActualWidth here: SetExpanded() resizes the window and then
-        // lays out immediately, before the framework has measured the new size.
-        // Reading the stale size collapsed the ring to the ball's radius, which
-        // is why expanding looked like "nothing happens".
-        double width = _layoutDiameterDip;
-        double height = _layoutDiameterDip;
-        if (width <= 0 || height <= 0)
-        {
-            width = ClosedSize;
-            height = ClosedSize;
-        }
+        // 不能用 ActualWidth：SetExpanded 里 Resize 之后马上布局，框架还没测量，
+        // 读到的是旧尺寸（曾把环缩成球内的小圈，表现成“点了没反应”）。
+        // 目标尺寸只认 _layoutDiameterDip。
+        double windowSide = _layoutDiameterDip > 0 ? _layoutDiameterDip : ClosedSize;
+        double ballCx = windowSide / 2;
+        double ballCy = windowSide / 2;
 
-        _centerX = width / 2;
-        _centerY = height / 2;
+        // 扇形画在固定的 ExpandedSize 坐标系里，再由 ScaleTransform 等比缩进窗口，
+        // 所以圆心永远是 ExpandedSize/2，与窗口实际尺寸无关。
+        _centerX = ExpandedSize / 2;
+        _centerY = ExpandedSize / 2;
+        _fanOuter = FanOuter;
+        _fanInner = FanInner;
 
-        double side = Math.Min(width, height);
-        _fanOuter = Math.Max(60, (side / 2) - WindowPadding);
-        _fanInner = Math.Max(38, _fanOuter * 0.22);
+        double fanScale = Math.Clamp(windowSide / ExpandedSize, 0.4, 1.0);
+        FanCanvas.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+        FanCanvas.RenderTransform = new ScaleTransform { ScaleX = fanScale, ScaleY = fanScale };
 
-        Canvas.SetLeft(Ball, _centerX - (BallDiameter / 2));
-        Canvas.SetTop(Ball, _centerY - (BallDiameter / 2));
-        Canvas.SetLeft(BallRing, _centerX - (BallRing.Width / 2));
-        Canvas.SetTop(BallRing, _centerY - (BallRing.Height / 2));
+        Canvas.SetLeft(Ball, ballCx - (BallDiameter / 2));
+        Canvas.SetTop(Ball, ballCy - (BallDiameter / 2));
+        Canvas.SetLeft(BallRing, ballCx - (BallRing.Width / 2));
+        Canvas.SetTop(BallRing, ballCy - (BallRing.Height / 2));
 
         BallGlyph.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(BallGlyph, _centerX - (BallGlyph.DesiredSize.Width / 2));
-        Canvas.SetTop(BallGlyph, _centerY - (BallGlyph.DesiredSize.Height / 2));
+        Canvas.SetLeft(BallGlyph, ballCx - (BallGlyph.DesiredSize.Width / 2));
+        Canvas.SetTop(BallGlyph, ballCy - (BallGlyph.DesiredSize.Height / 2));
 
-        Canvas.SetLeft(StateDot, _centerX + 12);
-        Canvas.SetTop(StateDot, _centerY + 12);
+        Canvas.SetLeft(StateDot, ballCx + 12);
+        Canvas.SetTop(StateDot, ballCy + 12);
     }
 
     private SizeInt32 WindowSizePixels(double diameterDip)
@@ -296,31 +300,34 @@ public sealed partial class WidgetDrawerWindow : Window
         return new SizeInt32(pixels, pixels);
     }
 
-    private double ExpandedDiameterDip()
+    /// <summary>展开窗口的直径（DIP）：默认就是固定的 ExpandedSize，只有球
+    /// 贴着屏幕边缘、装不下时才整体缩小（扇形同步等比缩放，形状不变）。</summary>
+    private double AvailableExpandedDip()
     {
-        // Whatever fits between the ball and the nearest work-area edge, doubled.
         try
         {
             AppWindow appWindow = GetAppWindow();
             PointInt32 position = appWindow.Position;
+            SizeInt32 size = appWindow.Size;
+
+            // 用窗口真实中心当球心：收起/展开都成立，不依赖 ClosedSize 与 _scale。
+            int ballCenterX = position.X + (size.Width / 2);
+            int ballCenterY = position.Y + (size.Height / 2);
+
             RectInt32 work = DisplayArea
                 .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
                 .WorkArea;
-
-            int ballCenterX = position.X + (int)Math.Round((ClosedSize / 2) * _scale);
-            int ballCenterY = position.Y + (int)Math.Round((ClosedSize / 2) * _scale);
 
             double nearest = Math.Min(
                 Math.Min(ballCenterX - work.X, work.X + work.Width - ballCenterX),
                 Math.Min(ballCenterY - work.Y, work.Y + work.Height - ballCenterY));
 
-            double available = (nearest / _scale) - 4;
-            double radius = Math.Clamp(available, MinFanOuter, MaxFanOuter);
-            return ((radius + WindowPadding) * 2);
+            double available = ((nearest / _scale) * 2) - 8;
+            return Math.Clamp(available, MinExpandedSize, ExpandedSize);
         }
         catch (Exception)
         {
-            return (MaxFanOuter + WindowPadding) * 2;
+            return ExpandedSize;
         }
     }
 
@@ -383,7 +390,7 @@ public sealed partial class WidgetDrawerWindow : Window
         int ballCenterY = center.Y;
 
         _expanded = expanded;
-        double diameter = expanded ? ExpandedDiameterDip() : ClosedSize;
+        double diameter = expanded ? AvailableExpandedDip() : ClosedSize;
         _layoutDiameterDip = diameter;
 
         // The window grows around the ball centre, so the bead never moves on
