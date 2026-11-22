@@ -481,6 +481,14 @@ public sealed partial class AppUpdateService : IAppUpdateService
 
         try
         {
+            // Our fork publishes a zip (payload/ + 更新.bat) instead of an Inno
+            // Setup exe, so the detached updater helper would have nothing to run.
+            // Extract the zip and let 更新.bat replace the payload, then quit.
+            if (installerPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return StartZipInstaller(installerPath);
+            }
+
             string helperPath = PrepareDetachedUpdaterHelper(AppContext.BaseDirectory, _updateRootPath);
             if (!File.Exists(helperPath))
             {
@@ -788,6 +796,39 @@ public sealed partial class AppUpdateService : IAppUpdateService
             uri.AbsolutePath.StartsWith(
                 "/prb9210/DeskBox/releases/download/",
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    private AppUpdateInstallResult StartZipInstaller(string zipPath)
+    {
+        try
+        {
+            string stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+            string root = Path.Combine(_updateRootPath, "zip", stamp);
+            Directory.CreateDirectory(root);
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, root, overwriteFiles: true);
+
+            string batch = Path.Combine(root, "更新.bat");
+            if (!File.Exists(batch))
+            {
+                return AppUpdateInstallResult.Failed("更新包缺少 更新.bat。");
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = root
+            };
+            startInfo.ArgumentList.Add("/c");
+            startInfo.ArgumentList.Add(batch);
+            Process.Start(startInfo);
+            return AppUpdateInstallResult.Started();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return AppUpdateInstallResult.Failed(ex.Message);
+        }
     }
 
     private static bool IsHostOrSubdomain(Uri uri, string domain)
