@@ -27,8 +27,8 @@
                  with clipped corners, an ellipse is always a circle. -->
             <Ellipse
                 x:Name="BallRing"
-                Width="66"
-                Height="66"
+                Width="60"
+                Height="60"
                 IsHitTestVisible="False"
                 Stroke="#66FFFFFF"
                 StrokeThickness="1" />

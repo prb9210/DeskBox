@@ -24,6 +24,14 @@ public sealed class AppUpdateServiceTests : IDisposable
         Assert.True(AppUpdateService.IsInstallerAssetName("DeskBox_Setup_1.4.8_arm64.exe", "arm64"));
         Assert.False(AppUpdateService.IsInstallerAssetName("DeskBox_Setup_1.4.3_x64_Full.exe", "x64"));
         Assert.False(AppUpdateService.IsInstallerAssetName("DeskBox_Setup_1.4.3_arm64_Full.exe", "arm64"));
+        // 本项目发的是整包 zip（DeskBox-<版本>.zip）：x64 必须认，arm64 不认，
+        // 别把 .sha256 侧车文件当成安装包。
+        Assert.True(AppUpdateService.IsInstallerAssetName("DeskBox-1.5.21.zip", "x64"));
+        Assert.False(AppUpdateService.IsInstallerAssetName("DeskBox-1.5.21.zip", "arm64"));
+        Assert.False(AppUpdateService.IsInstallerAssetName("DeskBox-1.5.21.zip.sha256", "x64"));
+        Assert.True(AppUpdateService.IsInstallerDownloadCompatibleWithArchitecture(
+            "https://github.com/prb9210/DeskBox/releases/download/v1.5.21/DeskBox-1.5.21.zip",
+            "x64"));
         Assert.True(AppUpdateService.IsInstallerDownloadCompatibleWithArchitecture(
             "https://deskbox.fun/DeskBox_Setup_1.2.4_arm64.exe",
             "arm64"));

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using DeskBox.Helpers;
@@ -51,6 +51,7 @@ public sealed partial class WidgetDrawerWindow : Window
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
     private double _scale = 1.0;
+    private bool _clipApplied;
 
     // Recomputed每一次 from the actual client size.
     private double _centerX = ClosedSize / 2;
@@ -105,7 +106,7 @@ public sealed partial class WidgetDrawerWindow : Window
             // 关键：窗口真正改变尺寸后必须重新裁圆。
             // SetExpanded/ShowAtSavedSpot 里调 Resize 时 Size 还没生效，
             // 那次裁出来的圆偏小 → 球被裁成"剩一部分"。这里用生效后的真实尺寸重裁。
-            ApplyCircularWindowRegion();
+            ApplyWindowClip();
         };
     }
 
@@ -176,13 +177,18 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         ApplyScale();
-        ApplyCircularWindowRegion();
+        ApplyWindowClip();
     }
 
-    /// <summary>Clips the window to a circle so the ball is round even when the
-    /// system backdrop fails to go transparent (WinUI 3 has no per-pixel alpha,
-    /// and TransparentTintBackdrop flakes on Win11 at 150%).</summary>
-    private void ApplyCircularWindowRegion()
+    /// <summary>
+    /// 圆不圆只跟「收起状态」有关：收起时把窗口裁成内切圆，球一定是完整的圆。
+    ///
+    /// 展开时**一律不裁**。扇形的外径是 (窗口/2 - WindowPadding)，比内切圆还大；
+    /// 只要裁切半径不是从「窗口真实像素」算出来（早前几版用 DIP×_scale、
+    /// 用 ExpandedDiameterDip 复算），圆就会比扇形小或偏心，把扇片切成
+    /// 一条条斜片 —— 用户看到的「展开后是很奇怪的形状」就是它。
+    /// </summary>
+    private void ApplyWindowClip()
     {
         try
         {
@@ -192,47 +198,43 @@ public sealed partial class WidgetDrawerWindow : Window
                 return;
             }
 
-            AppWindow appWindow = GetAppWindow();
-            // 用窗口真实像素尺寸算圆，而不是 DIP × _scale：
-            // 150% 缩放下 _scale 在首次布局时可能还是 1.0，裁出来的圆比球小，
-            // 绿球就被切掉一条边（用户看到"不是正圆"的真正原因）。
-            // 用"窗口真实像素宽 ÷ 根容器 DIP 宽"反推当前缩放，
-            // 不依赖 _scale（首次布局时它可能还是 1.0，会把圆裁小、切掉一条边）。
-            var size = appWindow.Size;
-            double dipWidth = RootGrid.ActualWidth;
-            double scale = (dipWidth > 0 && size.Width > 0) ? size.Width / dipWidth : _scale;
-            if (scale <= 0)
+            if (_expanded)
             {
-                scale = 1.0;
-            }
+                // 展开：撤销区域裁切，窗口整块可见。圆不圆由扇片自己的几何决定，
+                // 背景透明由 TransparentTintBackdrop 负责。
+                if (_clipApplied)
+                {
+                    Win32Helper.SetWindowRgn(hWnd, IntPtr.Zero, true);
+                    _clipApplied = false;
+                    App.Log("[Drawer] clip cleared (expanded)");
+                }
 
-            // 以"球的圆心"为圆心裁圆，而不是锚定窗口左上角 (0,0)。
-            // 窗口因标题栏/DPI 舍入常不是严格正方形，用 min(宽,高) 当直径
-            // 且从 (0,0) 起画，圆心就跑到 (min/2, min/2)，与球心偏离——
-            // 表现就是"球只剩下一部分"。两者必须同心。
-            int centerX = size.Width / 2;
-            int centerY = size.Height / 2;
-            int radius = (int)Math.Round(((_expanded ? ExpandedDiameterDip() : ClosedSize) / 2) * scale);
-            if (radius <= 0)
-            {
-                radius = Math.Min(centerX, centerY);
-            }
-            radius = Math.Min(radius, Math.Min(centerX, centerY));
-            int diameter = radius * 2;
-            if (diameter <= 0)
-            {
-                App.Log($"[Drawer] region skipped: win={size.Width}x{size.Height} dip={dipWidth}");
                 return;
             }
 
-            IntPtr region = Win32Helper.CreateEllipticRgn(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
-            int rgnResult = Win32Helper.SetWindowRgn(hWnd, region, true);
-            bool ok = rgnResult != 0;
-            App.Log($"[Drawer] region d={diameter} win={size.Width}x{size.Height} dip={dipWidth:0.##} scale={scale:0.##} ok={ok}");
+            // 收起：内切圆 = 圆心在窗口正中央、半径 min(宽,高)/2。
+            // 球只有 56 DIP、窗口 64 DIP，内切圆必然比球大，所以无论缩放值、
+            // 尺寸生效时序如何，都切不到球 —— 这条约束是构造性的，不靠调参。
+            SizeInt32 size = GetAppWindow().Size;
+            int w = size.Width;
+            int h = size.Height;
+            int radius = Math.Min(w, h) / 2;
+            if (radius < 8)
+            {
+                App.Log($"[Drawer] clip skipped: win={w}x{h}");
+                return;
+            }
+
+            int cx = w / 2;
+            int cy = h / 2;
+            IntPtr region = Win32Helper.CreateEllipticRgn(cx - radius, cy - radius, cx + radius, cy + radius);
+            bool ok = Win32Helper.SetWindowRgn(hWnd, region, true) != 0;
+            _clipApplied = ok;
+            App.Log($"[Drawer] clip d={radius * 2} win={w}x{h} scale={_scale:0.##} ok={ok}");
         }
         catch (Exception ex)
         {
-            App.Log($"[Drawer] circular region failed: {ex.Message}");
+            App.Log($"[Drawer] window clip failed: {ex.Message}");
         }
     }
 
@@ -277,8 +279,8 @@ public sealed partial class WidgetDrawerWindow : Window
 
         Canvas.SetLeft(Ball, _centerX - (BallDiameter / 2));
         Canvas.SetTop(Ball, _centerY - (BallDiameter / 2));
-        Canvas.SetLeft(BallRing, _centerX - 33);
-        Canvas.SetTop(BallRing, _centerY - 33);
+        Canvas.SetLeft(BallRing, _centerX - (BallRing.Width / 2));
+        Canvas.SetTop(BallRing, _centerY - (BallRing.Height / 2));
 
         BallGlyph.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(BallGlyph, _centerX - (BallGlyph.DesiredSize.Width / 2));
@@ -409,7 +411,7 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         Animate(FanCanvas, expanded ? 1 : 0);
-        ApplyCircularWindowRegion();
+        ApplyWindowClip();
     }
 
     // ------------------------------------------------------------- appearance

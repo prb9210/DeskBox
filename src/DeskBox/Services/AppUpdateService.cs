@@ -971,10 +971,16 @@ public sealed partial class AppUpdateService : IAppUpdateService
     internal static string GetInstallerFileName(Uri downloadUri, string version)
     {
         string fileName = Path.GetFileName(downloadUri.LocalPath);
-        return string.IsNullOrWhiteSpace(fileName) ||
-            !fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? $"DeskBox_Setup_{SanitizePathSegment(version)}_{CurrentInstallerArchitectureSuffix}.exe"
-            : SanitizeFileName(fileName);
+        if (!string.IsNullOrWhiteSpace(fileName) &&
+            (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+             fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)))
+        {
+            // 必须保留 .zip 扩展名：安装分支靠它区分「Inno setup.exe」和
+            // 「整包 zip→更新.bat」。改名成 .exe 会让 zip 走 Inno 分支直接失败。
+            return SanitizeFileName(fileName);
+        }
+
+        return $"DeskBox_Setup_{SanitizePathSegment(version)}_{CurrentInstallerArchitectureSuffix}.exe";
     }
 
     internal static string GetInstallerArchitectureSuffix(Architecture architecture)
@@ -1014,9 +1020,25 @@ public sealed partial class AppUpdateService : IAppUpdateService
 
     internal static bool IsInstallerAssetName(string assetName, string architectureSuffix)
     {
-        return !string.IsNullOrWhiteSpace(architectureSuffix) &&
-            assetName.StartsWith("DeskBox_Setup_", StringComparison.OrdinalIgnoreCase) &&
-            assetName.EndsWith($"_{architectureSuffix}.exe", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(architectureSuffix))
+        {
+            return false;
+        }
+
+        if (assetName.StartsWith("DeskBox_Setup_", StringComparison.OrdinalIgnoreCase) &&
+            assetName.EndsWith($"_{architectureSuffix}.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // 本项目（prb9210/DeskBox 定制版）发布的是整包 zip：DeskBox-<版本>.zip，
+        // 里面是 payload/ + 更新.bat，由 StartZipInstaller 负责替换安装。
+        // 只认 Inno 的 DeskBox_Setup_*_x64.exe 时，自家 release 永远匹配不到资产
+        // → 「检查更新」恒失败（用户看到的就是“不能从项目地址下载更新”）。
+        // zip 只发 x64，arm64 进程不认。
+        return string.Equals(architectureSuffix, "x64", StringComparison.OrdinalIgnoreCase) &&
+            assetName.StartsWith("DeskBox-", StringComparison.OrdinalIgnoreCase) &&
+            assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool IsInstallerDownloadCompatibleWithArchitecture(
