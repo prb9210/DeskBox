@@ -214,7 +214,8 @@ public sealed partial class WidgetDrawerWindow : Window
             }
 
             IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter, diameter);
-            bool ok = Win32Helper.SetWindowRgn(hWnd, region, true);
+            int rgnResult = Win32Helper.SetWindowRgn(hWnd, region, true);
+            bool ok = rgnResult != 0;
             App.Log($"[Drawer] region d={diameter} win={size.Width}x{size.Height} dip={dipWidth:0.##} scale={scale:0.##} ok={ok}");
         }
         catch (Exception ex)
