@@ -188,7 +188,15 @@ public sealed partial class WidgetDrawerWindow : Window
             }
 
             AppWindow appWindow = GetAppWindow();
-            int diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * _scale);
+            // 用窗口真实像素尺寸算圆，而不是 DIP × _scale：
+            // 150% 缩放下 _scale 在首次布局时可能还是 1.0，裁出来的圆比球小，
+            // 绿球就被切掉一条边（用户看到"不是正圆"的真正原因）。
+            var size = appWindow.Size;
+            int diameter = Math.Min(size.Width, size.Height);
+            if (diameter <= 0)
+            {
+                diameter = (int)Math.Round((_expanded ? ExpandedDiameterDip() : ClosedSize) * _scale);
+            }
             IntPtr region = Win32Helper.CreateEllipticRgn(0, 0, diameter, diameter);
             Win32Helper.SetWindowRgn(hWnd, region, true);
         }
