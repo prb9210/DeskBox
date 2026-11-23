@@ -455,11 +455,11 @@ public sealed partial class AppUpdateService : IAppUpdateService
         if (!resolvedInstaller.StartsWith(
                 managedRoot + Path.DirectorySeparatorChar,
                 StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(Path.GetExtension(resolvedInstaller), ".exe", StringComparison.OrdinalIgnoreCase))
+            !IsManagedPackageExtension(resolvedInstaller))
         {
             App.Log($"[Update] Rejected installer outside the managed update root: {installerPath}");
             return AppUpdateInstallResult.Failed(
-                "The installer path is not inside DeskBox's managed update directory.");
+                "The update package must live inside DeskBox's managed update directory and be an .exe or .zip file.");
         }
 
         // From here to process exit this app hands the installer over to the
@@ -486,7 +486,7 @@ public sealed partial class AppUpdateService : IAppUpdateService
             // Extract the zip and let 更新.bat replace the payload, then quit.
             if (installerPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                return StartZipInstaller(installerPath);
+                return StartZipInstaller(installerPath, installDirectory, silent);
             }
 
             string helperPath = PrepareDetachedUpdaterHelper(AppContext.BaseDirectory, _updateRootPath);
@@ -798,7 +798,7 @@ public sealed partial class AppUpdateService : IAppUpdateService
                 StringComparison.OrdinalIgnoreCase);
     }
 
-    private AppUpdateInstallResult StartZipInstaller(string zipPath)
+    private AppUpdateInstallResult StartZipInstaller(string zipPath, string installDirectory, bool silent)
     {
         try
         {
@@ -813,6 +813,8 @@ public sealed partial class AppUpdateService : IAppUpdateService
                 return AppUpdateInstallResult.Failed("更新包缺少 更新.bat。");
             }
 
+            // 安装目录与静默标志走环境变量：cmd 的参数里带中文路径和空格时，
+            // `/c "路径" "参数"` 的引号规则很难写对，环境变量没有这个问题。
             var startInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
@@ -820,6 +822,8 @@ public sealed partial class AppUpdateService : IAppUpdateService
                 CreateNoWindow = true,
                 WorkingDirectory = root
             };
+            startInfo.Environment["DESKBOX_UPDATE_TARGET"] = installDirectory;
+            startInfo.Environment["DESKBOX_UPDATE_MODE"] = silent ? "silent" : "interactive";
             startInfo.ArgumentList.Add("/c");
             startInfo.ArgumentList.Add(batch);
             Process.Start(startInfo);
@@ -1039,6 +1043,17 @@ public sealed partial class AppUpdateService : IAppUpdateService
         return string.Equals(architectureSuffix, "x64", StringComparison.OrdinalIgnoreCase) &&
             assetName.StartsWith("DeskBox-", StringComparison.OrdinalIgnoreCase) &&
             assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // 本项目的发行物是整包 zip（payload/ + 更新.bat），不是 Inno setup.exe。
+    // 旧守卫只放行 .exe，于是「检查更新→下载成功→立即安装」被自己的安全
+    // 校验挡掉（用户看到的就是“不能从项目地址更新”）。这里只放宽扩展名，
+    // 路径仍必须落在受管的更新目录内，越权路径一样拒绝。
+    internal static bool IsManagedPackageExtension(string path)
+    {
+        string ext = Path.GetExtension(path);
+        return string.Equals(ext, ".exe", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool IsInstallerDownloadCompatibleWithArchitecture(

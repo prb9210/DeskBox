@@ -13,6 +13,18 @@ public sealed class AppUpdateServiceTests : IDisposable
     private readonly string _tempRoot = Path.Combine(Path.GetTempPath(), "DeskBox.Tests", Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void ManagedPackageExtension_AcceptsZipAndExeOnly()
+    {
+        // 整包 zip 必须能进安装分支：旧守卫只认 .exe，导致
+        // 「检查更新→下载成功→立即安装」被自己的安全校验挡掉。
+        Assert.True(AppUpdateService.IsManagedPackageExtension(@"C:\x\updates\1.5.23\DeskBox-1.5.23.zip"));
+        Assert.True(AppUpdateService.IsManagedPackageExtension(@"C:\x\updates\1.5.23\DeskBox_Setup_1.5.23_x64.EXE"));
+        Assert.False(AppUpdateService.IsManagedPackageExtension(@"C:\x\updates\1.5.23\DeskBox-1.5.23.zip.tmp"));
+        Assert.False(AppUpdateService.IsManagedPackageExtension(@"C:\x\updates\1.5.23\DeskBox-1.5.23.zip.sha256"));
+        Assert.False(AppUpdateService.IsManagedPackageExtension(@"C:\x\updates\1.5.23\payload.7z"));
+    }
+
+    [Fact]
     public void InstallerAssetSelection_UsesTheCurrentProcessArchitecture()
     {
         Assert.Equal("x64", AppUpdateService.GetInstallerArchitectureSuffix(Architecture.X64));
