@@ -140,8 +140,10 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -149,11 +151,16 @@
 
                 <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="桌面文件夹" />
                 <TextBox Grid.Row="0" Grid.Column="1" x:Name="DesktopBox" HorizontalAlignment="Stretch" />
+                <Button Grid.Row="0" Grid.Column="2" Click="PickDesktopFolder_Click" Content="浏览…" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="共享库文件夹" />
                 <TextBox Grid.Row="1" Grid.Column="1" x:Name="LibraryBox" HorizontalAlignment="Stretch" />
+                <Button Grid.Row="1" Grid.Column="2" Click="PickLibraryFolder_Click" Content="浏览…" />
 
-                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TrashText" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" Text="待删除目录：-" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap"
+                           Text="共享库建议放在坚果云同步的文件夹里（例如 …\我的坚果云\教学资料库）。选完记得点下面的「保存设置」。" />
+
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TrashText" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" Text="待删除目录：-" />
             </Grid>
         </toolkit:SettingsCard>
 

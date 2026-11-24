@@ -391,6 +391,71 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
+    // ------------------------------------------------- 文件夹（桌面 / 共享库）浏览
+
+    /// <summary>Names a Nutstore/OneDrive style sync root ends with. When the
+    /// user picks one of these as the library we append 教学资料库, because
+    /// dropping the eight category folders straight into the sync root would
+    /// mix them with everything else that is being synced.</summary>
+    private static readonly string[] SyncRootTailNames = { "我的坚果云", "坚果云", "nutstore", "同步" };
+
+    private async void PickDesktopFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string? path = await FolderPickerService.PickFolderAsync(OwnerHandle);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            DesktopBox.Text = path;
+            SaveMessage.Text = "已选桌面文件夹，点下面「保存设置」生效。";
+        }
+        catch (Exception ex)
+        {
+            SaveMessage.Text = "选择文件夹失败：" + ex.Message;
+        }
+    }
+
+    private async void PickLibraryFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string? path = await FolderPickerService.PickFolderAsync(OwnerHandle);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            string tail = Path.GetFileName(path.TrimEnd('\\', '/'));
+            bool looksLikeSyncRoot = false;
+            foreach (string name in SyncRootTailNames)
+            {
+                if (string.Equals(tail, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    looksLikeSyncRoot = true;
+                    break;
+                }
+            }
+
+            if (looksLikeSyncRoot && !string.Equals(tail, "教学资料库", StringComparison.OrdinalIgnoreCase))
+            {
+                LibraryBox.Text = Path.Combine(path, "教学资料库");
+                SaveMessage.Text = "已选坚果云同步目录，共享库自动补成 …\\教学资料库（点「保存设置」生效，目录会自动创建）。";
+            }
+            else
+            {
+                LibraryBox.Text = path;
+                SaveMessage.Text = "已选共享库文件夹，点下面「保存设置」生效。";
+            }
+        }
+        catch (Exception ex)
+        {
+            SaveMessage.Text = "选择文件夹失败：" + ex.Message;
+        }
+    }
+
     private async void MoveSourceButton_Click(object sender, RoutedEventArgs e)
     {
         string source = SourcePathBox.Text.Trim().Trim('"');
