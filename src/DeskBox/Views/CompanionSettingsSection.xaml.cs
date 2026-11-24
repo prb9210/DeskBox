@@ -278,6 +278,88 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     // ------------------------------------------------------------ categories
 
+    /// <summary>Fallback taxonomy: the engine's 8 top-level folders, used when
+    /// neither the running engine nor its config.json can be read. Keeping it
+    /// here means the button still builds the格 even if the engine is down.</summary>
+    private static readonly string[] FallbackCategoryRoots =
+    {
+        "01 数学教学",
+        "02 教务考务",
+        "03 控辍保学",
+        "04 上级文件",
+        "05 班级管理",
+        "06 家校沟通",
+        "07 教研与进修",
+        "08 行政与事务"
+    };
+
+    private static string CompanionConfigPath() =>
+        Path.Combine(AppContext.BaseDirectory, "companion", "config.json");
+
+    /// <summary>Reads <c>library</c> straight from the engine's own config so the
+    /// button works even when the engine is not answering on 127.0.0.1:8765.</summary>
+    private static string ReadLibraryFromCompanionConfig()
+    {
+        try
+        {
+            string configPath = CompanionConfigPath();
+            if (!File.Exists(configPath))
+            {
+                return string.Empty;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(configPath));
+            if (!document.RootElement.TryGetProperty("library", out JsonElement element))
+            {
+                return string.Empty;
+            }
+
+            string raw = element.GetString() ?? string.Empty;
+            return Environment.ExpandEnvironmentVariables(raw).Trim().Trim('"');
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Top-level folder names from the engine config's <c>paths[]</c>.</summary>
+    private static List<string> ReadRootsFromCompanionConfig()
+    {
+        var roots = new List<string>();
+        try
+        {
+            string configPath = CompanionConfigPath();
+            if (!File.Exists(configPath))
+            {
+                return roots;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(configPath));
+            if (!document.RootElement.TryGetProperty("paths", out JsonElement paths) ||
+                paths.ValueKind != JsonValueKind.Array)
+            {
+                return roots;
+            }
+
+            foreach (JsonElement item in paths.EnumerateArray())
+            {
+                string dir = Str(item, "dir");
+                string first = dir.Split('/', '\\')[0].Trim();
+                if (first.Length > 0 && !first.StartsWith("_", StringComparison.Ordinal) && !roots.Contains(first))
+                {
+                    roots.Add(first);
+                }
+            }
+        }
+        catch
+        {
+            // Fall through: the caller uses its built-in list.
+        }
+
+        return roots;
+    }
+
     private async Task LoadCategoriesAsync()
     {
         if (_categoriesLoaded)
@@ -458,15 +540,50 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     private async void GenerateCategoryWidgets_Click(object sender, RoutedEventArgs e)
     {
+        GenerateWidgetsButton.IsEnabled = false;
         try
         {
+            GenerateWidgetsMessage.Text = "正在准备分类格子…";
+
+            // 1) 共享库：输入框 → 引擎状态 → 引擎自己的 config.json（引擎没起也能干活）
             string library = LibraryBox.Text.Trim().Trim('"');
             if (library.Length == 0)
             {
-                SaveMessage.Text = "先在上面选好共享库文件夹（并保存），再生成格子。";
+                CompanionStatus status = await CompanionClient.GetStatusAsync();
+                if (status.Reachable && !string.IsNullOrWhiteSpace(status.Library))
+                {
+                    library = status.Library.Trim().Trim('"');
+                }
+            }
+
+            if (library.Length == 0)
+            {
+                library = ReadLibraryFromCompanionConfig();
+            }
+
+            if (library.Length == 0)
+            {
+                GenerateWidgetsMessage.Text =
+                    "找不到共享库文件夹：请先在上面点「浏览…」选一个（例如 …\\我的坚果云\\教学资料库），再点这个按钮。";
                 return;
             }
 
+            if (LibraryBox.Text.Trim().Length == 0)
+            {
+                LibraryBox.Text = library;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(library);
+            }
+            catch (Exception ex)
+            {
+                GenerateWidgetsMessage.Text = "共享库文件夹不可用：" + ex.Message;
+                return;
+            }
+
+            // 2) 分类清单：引擎 /api/paths → config.json paths[] → 内置八类
             if (!_categoriesLoaded)
             {
                 await LoadCategoriesAsync();
@@ -475,8 +592,8 @@ public sealed partial class CompanionSettingsSection : UserControl
             List<string> roots = new();
             foreach ((string _, string dir) in _categories)
             {
-                string first = dir.Split('/')[0].Trim();
-                if (first.Length > 0 && !roots.Contains(first))
+                string first = dir.Split('/', '\\')[0].Trim();
+                if (first.Length > 0 && !first.StartsWith("_", StringComparison.Ordinal) && !roots.Contains(first))
                 {
                     roots.Add(first);
                 }
@@ -484,13 +601,17 @@ public sealed partial class CompanionSettingsSection : UserControl
 
             if (roots.Count == 0)
             {
-                SaveMessage.Text = "没拿到分类目录：管家引擎可能没在运行，重启 DeskBox 再试。";
-                return;
+                roots = ReadRootsFromCompanionConfig();
+            }
+
+            if (roots.Count == 0)
+            {
+                roots.AddRange(FallbackCategoryRoots);
             }
 
             if (Application.Current is not App app || app.WidgetManager is not WidgetManager manager)
             {
-                SaveMessage.Text = "格子管理器还没就绪，重启 DeskBox 再试。";
+                GenerateWidgetsMessage.Text = "格子管理器还没就绪，重启 DeskBox 再试。";
                 return;
             }
 
@@ -499,7 +620,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             {
                 if (!string.IsNullOrWhiteSpace(widget.MappedFolderPath))
                 {
-                    existing.Add(Path.TrimEndingDirectorySeparator(widget.MappedFolderPath));
+                    existing.Add(NormalizeFolderPath(widget.MappedFolderPath!));
                 }
             }
 
@@ -508,7 +629,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             List<string> failed = new();
             foreach (string name in roots)
             {
-                string path = Path.TrimEndingDirectorySeparator(Path.Combine(library, name));
+                string path = NormalizeFolderPath(Path.Combine(library, name));
                 if (existing.Contains(path))
                 {
                     skipped++;
@@ -519,6 +640,7 @@ public sealed partial class CompanionSettingsSection : UserControl
                 {
                     Directory.CreateDirectory(path);
                     await manager.CreateFolderWidgetAsync(path);
+                    existing.Add(path);
                     created++;
                 }
                 catch (Exception ex)
@@ -527,13 +649,40 @@ public sealed partial class CompanionSettingsSection : UserControl
                 }
             }
 
-            SaveMessage.Text = failed.Count == 0
-                ? "已生成 " + created + " 个分类格子（已有 " + skipped + " 个跳过）。悬浮球展开就能看到。"
-                : "生成 " + created + " 个，跳过 " + skipped + " 个，失败 " + failed.Count + " 个：" + string.Join("；", failed);
+            string summary = created > 0
+                ? "已生成 " + created + " 个分类格子"
+                : "没有新建：这些分类都已有格子";
+
+            if (skipped > 0)
+            {
+                summary += "（" + skipped + " 个已存在，跳过）";
+            }
+
+            summary += "。展开悬浮球就能看到，点扇片可显示／收起。";
+
+            GenerateWidgetsMessage.Text = failed.Count == 0
+                ? summary
+                : summary + " 失败 " + failed.Count + " 个：" + string.Join("；", failed);
         }
         catch (Exception ex)
         {
-            SaveMessage.Text = "生成格子失败：" + ex.Message;
+            GenerateWidgetsMessage.Text = "生成格子失败：" + ex.Message;
+        }
+        finally
+        {
+            GenerateWidgetsButton.IsEnabled = true;
+        }
+    }
+
+    private static string NormalizeFolderPath(string path)
+    {
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+        catch
+        {
+            return Path.TrimEndingDirectorySeparator(path);
         }
     }
 
