@@ -19,8 +19,6 @@ namespace DeskBox.Views;
 /// </summary>
 public sealed partial class CompanionSettingsSection : UserControl
 {
-    private static readonly int[] IntervalChoices = { 15, 30, 60, 120, 240, 720 };
-
     private readonly List<(string Id, string Dir)> _categories = new();
 
     private bool _statusBusy;
@@ -35,10 +33,6 @@ public sealed partial class CompanionSettingsSection : UserControl
     public CompanionSettingsSection()
     {
         InitializeComponent();
-        foreach (int minutes in IntervalChoices)
-        {
-            IntervalBox.Items.Add(minutes + " 分钟");
-        }
 
         Loaded += async (_, _) =>
         {
@@ -166,27 +160,21 @@ public sealed partial class CompanionSettingsSection : UserControl
                 ActionValue.Text = "管家引擎未运行";
                 ScanValue.Text = "-";
                 ApplyValue.Text = "-";
-                SyncValue.Text = "-";
                 ErrorValue.Text = "引擎没有响应，退出 DeskBox 再打开一次";
                 AiValue.Text = "-";
                 ApplyNowButton.IsEnabled = false;
-                SyncNowButton.IsEnabled = false;
                 BackupNowButton.IsEnabled = false;
                 return;
             }
 
             ApplyNowButton.IsEnabled = true;
-            SyncNowButton.IsEnabled = true;
             BackupNowButton.IsEnabled = true;
 
-            ActionValue.Text = status.SyncBusy ? "同步中" : status.OrgBusy ? "整理中" : "空闲";
+            ActionValue.Text = status.OrgBusy ? "整理中" : "空闲";
             ScanValue.Text = Or(status.LastScan);
             ApplyValue.Text = status.LastApplyCount > 0
                 ? Or(status.LastApply) + " · " + status.LastApplyCount + " 个"
                 : Or(status.LastApply);
-            SyncValue.Text = Or(status.LastSync)
-                + (string.IsNullOrEmpty(status.LastSyncError) ? string.Empty : "　⚠ " + status.LastSyncError)
-                + (string.IsNullOrEmpty(status.SyncNote) ? string.Empty : "　" + status.SyncNote);
             ErrorValue.Text = Or(status.LastError);
             AiValue.Text = status.AiEnabled
                 ? status.AiModel + " · 调用 " + status.AiCalls + " 次"
@@ -217,38 +205,15 @@ public sealed partial class CompanionSettingsSection : UserControl
             JsonElement root = document.RootElement;
             DesktopBox.Text = Str(root, "desktop");
             LibraryBox.Text = Str(root, "library");
-            UserBox.Text = Str(root, "webdav_user");
-            SyncEnabledCheck.IsChecked = Bool(root, "sync_enabled");
-
-            int interval = (int)Num(root, "interval_minutes");
-            int index = Array.IndexOf(IntervalChoices, interval);
-            if (index < 0)
-            {
-                index = Array.IndexOf(IntervalChoices, 30);
-            }
-
-            if (index >= 0)
-            {
-                IntervalBox.SelectedIndex = index;
-            }
         }
 
         _settingsLoaded = true;
     }
 
-    private void IntervalBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-    }
-
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        int minutes = IntervalBox.SelectedIndex >= 0 && IntervalBox.SelectedIndex < IntervalChoices.Length
-            ? IntervalChoices[IntervalBox.SelectedIndex]
-            : 30;
-
-        (bool ok, string message) = await CompanionClient.PostJsonAsync("/api/settings", SettingsJson(minutes));
+        (bool ok, string message) = await CompanionClient.PostJsonAsync("/api/settings", SettingsJson());
         SaveMessage.Text = ok ? "已保存，立即生效。" : "保存失败：" + message;
-        PasswordBoxControl.Password = string.Empty;
         ApiKeyBox.Password = string.Empty;
         await RefreshStatusAsync();
     }
@@ -257,9 +222,6 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     private async void ApplyNowButton_Click(object sender, RoutedEventArgs e) =>
         await RunActionAsync("/api/apply", "整理", RefreshPlanAsync);
-
-    private async void SyncNowButton_Click(object sender, RoutedEventArgs e) =>
-        await RunActionAsync("/api/sync", "同步", null);
 
     private async void BackupNowButton_Click(object sender, RoutedEventArgs e) =>
         await RunActionAsync("/api/backup", "备份", null);
@@ -1091,7 +1053,7 @@ public sealed partial class CompanionSettingsSection : UserControl
     // Utf8JsonWriter instead of JsonSerializer: the reflection-based overloads
     // raise IL2026/IL3050 and the AOT retail publish treats those as errors.
 
-    private string SettingsJson(int minutes)
+    private string SettingsJson()
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
@@ -1099,14 +1061,6 @@ public sealed partial class CompanionSettingsSection : UserControl
             writer.WriteStartObject();
             writer.WriteString("desktop", DesktopBox.Text.Trim());
             writer.WriteString("library", LibraryBox.Text.Trim());
-            writer.WriteString("webdav_user", UserBox.Text.Trim());
-            writer.WriteNumber("interval_minutes", minutes);
-            writer.WriteBoolean("sync_enabled", SyncEnabledCheck.IsChecked == true);
-            if (!string.IsNullOrEmpty(PasswordBoxControl.Password))
-            {
-                writer.WriteString("webdav_password", PasswordBoxControl.Password);
-            }
-
             if (!string.IsNullOrEmpty(ApiKeyBox.Password))
             {
                 writer.WriteString("api_key", ApiKeyBox.Password);

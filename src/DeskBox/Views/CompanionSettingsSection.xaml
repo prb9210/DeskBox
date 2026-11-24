@@ -54,7 +54,6 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="当前动作" />
@@ -66,14 +65,11 @@
                     <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近整理" />
                     <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ApplyValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近同步" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" x:Name="SyncValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近错误" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ErrorValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近错误" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ErrorValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
-
-                    <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="AI 分类" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" x:Name="AiValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="AI 分类" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" x:Name="AiValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
                 </Grid>
             </StackPanel>
         </Border>
@@ -127,7 +123,6 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Button x:Name="ApplyNowButton" Click="ApplyNowButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="立即整理" />
-                        <Button x:Name="SyncNowButton" Click="SyncNowButton_Click" Content="立即同步" />
                         <Button x:Name="BackupNowButton" Click="BackupNowButton_Click" Content="立即备份" />
                     </StackPanel>
                 </Grid>
@@ -186,43 +181,15 @@
             </StackPanel>
         </Border>
 
-        <!-- ============================ 同步 ============================ -->
-        <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
-            <StackPanel Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <FontIcon Glyph="&#xE895;" Style="{StaticResource CompanionCardIconStyle}" />
-                    <TextBlock Text="同步与备份" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
-                </StackPanel>
-                <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
-                           Text="走坚果云客户端同步时，请关掉这里的 WebDAV 同步，避免两条路互相干扰" />
-
-                <Grid ColumnSpacing="16" RowSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="同步间隔" />
-                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="IntervalBox" HorizontalAlignment="Stretch" SelectionChanged="IntervalBox_SelectionChanged" />
-
-                    <CheckBox Grid.Row="1" Grid.Column="1" x:Name="SyncEnabledCheck" Content="启用管家自带 WebDAV 同步" />
-                </Grid>
-            </StackPanel>
-        </Border>
-
         <!-- ============================ 账号 ============================ -->
         <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <FontIcon Glyph="&#xE8D7;" Style="{StaticResource CompanionCardIconStyle}" />
-                    <TextBlock Text="坚果云与 AI" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
+                    <TextBlock Text="AI 分类" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
-                           Text="应用密码在坚果云网页「账户信息 → 安全选项 → 添加应用」生成；留空表示不修改" />
+                           Text="填入 DeepSeek 密钥后，规则拿不准的文件交给 AI 定夺；留空表示不修改。文件同步由坚果云客户端负责，这里不再配置。" />
 
                 <Grid ColumnSpacing="16" RowSpacing="10">
                     <Grid.ColumnDefinitions>
@@ -235,14 +202,8 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="坚果云账号" />
-                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="UserBox" HorizontalAlignment="Stretch" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="应用密码" />
-                    <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="PasswordBoxControl" HorizontalAlignment="Stretch" PlaceholderText="留空则不修改" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="DeepSeek 密钥" />
-                    <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="ApiKeyBox" HorizontalAlignment="Stretch" PlaceholderText="留空则不修改" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="DeepSeek 密钥" />
+                    <PasswordBox Grid.Row="0" Grid.Column="1" x:Name="ApiKeyBox" HorizontalAlignment="Stretch" PlaceholderText="留空则不修改" />
                 </Grid>
             </StackPanel>
         </Border>
