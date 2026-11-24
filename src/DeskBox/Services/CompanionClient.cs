@@ -132,6 +132,26 @@ public static class CompanionClient
         }
     }
 
+    /// <summary>PUTs a JSON body (used by the cross-machine layout channel).</summary>
+    public static async Task<(bool Ok, string Message)> PutJsonAsync(
+        string path,
+        string json,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using System.Net.Http.HttpResponseMessage response =
+                await Http.PutAsync(BaseUrl + path, content, cancellationToken).ConfigureAwait(false);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return (response.IsSuccessStatusCode, body);
+        }
+        catch (Exception ex)
+        {
+            return (false, "连不上管家引擎：" + ex.Message);
+        }
+    }
+
     /// <summary>POSTs one of the engine's action endpoints and returns its text.</summary>
     public static async Task<(bool Ok, string Message)> PostAsync(
         string path,

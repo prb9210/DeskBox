@@ -181,6 +181,23 @@
             </StackPanel>
         </Border>
 
+        <!-- ============================ 布局同步 ============================ -->
+        <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE7C4;" Style="{StaticResource CompanionCardIconStyle}" />
+                    <TextBlock Text="布局同步" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
+                           Text="把格子（位置、大小、指向的文件夹）和悬浮球的样式同步到另一台。位置按屏幕边角记录，两台分辨率不同也不会跑出屏外；本机的热键、路径、密钥不参与同步。" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="LayoutPushButton" Click="LayoutPushButton_Click" Content="推送到另一台" />
+                    <Button x:Name="LayoutPullButton" Click="LayoutPullButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="以另一台为准" />
+                </StackPanel>
+                <TextBlock x:Name="LayoutMessage" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
         <!-- ============================ 账号 ============================ -->
         <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
             <StackPanel Spacing="8">

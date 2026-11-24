@@ -636,6 +636,93 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
+    // ------------------------------------------------------------ 布局同步
+
+    private async void LayoutPushButton_Click(object sender, RoutedEventArgs e)
+    {
+        LayoutPushButton.IsEnabled = false;
+        try
+        {
+            LayoutMessage.Text = "正在推送本机布局…";
+            if (Application.Current is not App app)
+            {
+                LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
+                return;
+            }
+
+            string library = await ResolveLibraryFolderAsync();
+            if (library.Length == 0)
+            {
+                LayoutMessage.Text = "先在上面选好共享库文件夹，再推送布局。";
+                return;
+            }
+
+            LayoutSyncService.Result result = await LayoutSyncService.PushAsync(app, library);
+            LayoutMessage.Text = result.Message;
+        }
+        catch (Exception ex)
+        {
+            LayoutMessage.Text = "推送布局失败：" + ex.Message;
+        }
+        finally
+        {
+            LayoutPushButton.IsEnabled = true;
+        }
+    }
+
+    private async void LayoutPullButton_Click(object sender, RoutedEventArgs e)
+    {
+        LayoutPullButton.IsEnabled = false;
+        try
+        {
+            LayoutMessage.Text = "正在读取另一台的布局…";
+            if (Application.Current is not App app)
+            {
+                LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
+                return;
+            }
+
+            string library = await ResolveLibraryFolderAsync();
+            if (library.Length == 0)
+            {
+                LayoutMessage.Text = "先在上面选好共享库文件夹，再读取布局。";
+                return;
+            }
+
+            LayoutSyncService.Result result = await LayoutSyncService.PullAsync(app, library);
+            LayoutMessage.Text = result.Message;
+        }
+        catch (Exception ex)
+        {
+            LayoutMessage.Text = "应用布局失败：" + ex.Message;
+        }
+        finally
+        {
+            LayoutPullButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>共享库路径：输入框 → 引擎状态 → 引擎 config.json。</summary>
+    private async Task<string> ResolveLibraryFolderAsync()
+    {
+        string library = LibraryBox.Text.Trim().Trim('"');
+        if (library.Length == 0)
+        {
+            CompanionStatus status = await CompanionClient.GetStatusAsync();
+            if (status.Reachable && !string.IsNullOrWhiteSpace(status.Library))
+            {
+                library = status.Library.Trim().Trim('"');
+            }
+        }
+
+        if (library.Length == 0)
+        {
+            library = ReadLibraryFromCompanionConfig();
+        }
+
+        return library;
+    }
+
     private static string NormalizeFolderPath(string path)
     {
         try
