@@ -616,7 +616,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             }
 
             HashSet<string> existing = new(StringComparer.OrdinalIgnoreCase);
-            foreach (DeskBox.Models.WidgetConfig widget in app.SettingsService.Settings.Widgets)
+            foreach (DeskBox.Models.WidgetConfig widget in app.SettingsService.Settings.WidgetLayout.Widgets)
             {
                 if (!string.IsNullOrWhiteSpace(widget.MappedFolderPath))
                 {
