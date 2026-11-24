@@ -51,6 +51,9 @@ public sealed partial class WidgetDrawerWindow : Window
     private bool _expanded;
     private bool _pointerDown;
     private bool _collapseHandledPress;
+    /// <summary>Press started on the bead while the ring is open. Release
+    /// without movement collapses the ring; movement drags the whole ring.</summary>
+    private bool _centerPressWhileExpanded;
     private double _layoutDiameterDip = ClosedSize;
     private bool _dragging;
     private Windows.Foundation.Point _pressPoint;
@@ -714,19 +717,38 @@ public sealed partial class WidgetDrawerWindow : Window
     {
         if (_expanded)
         {
-            // A press that started on a sector must reach the sector's own tap
-            // handler; only presses on empty space close the ring.
-            if (IsSectorSource(e.OriginalSource))
+            bool onBead = PressIsOnBead(e);
+            if (!onBead && IsSectorSource(e.OriginalSource))
             {
+                // A press that started on a sector must reach the sector's own
+                // tap handler; only presses on empty space close the ring.
                 return;
             }
 
-            SetExpanded(false);
-            _collapseHandledPress = true;
-            e.Handled = true;
+            if (!onBead)
+            {
+                SetExpanded(false);
+                _collapseHandledPress = true;
+                e.Handled = true;
+                return;
+            }
+
+            // The bead sits inside the ring: a click collapses it, a drag moves
+            // the whole ring. Which one it is can only be known on release, so
+            // the press is captured here and decided there. Deciding on press
+            // (the old behaviour) meant a one-pixel wobble on the bead was read
+            // as "clicked the neighbouring sector" and the ring never closed.
+            _centerPressWhileExpanded = true;
+            BeginPressTracking(e);
             return;
         }
 
+        _centerPressWhileExpanded = false;
+        BeginPressTracking(e);
+    }
+
+    private void BeginPressTracking(PointerRoutedEventArgs e)
+    {
         RootGrid.CapturePointer(e.Pointer);
         _pointerDown = true;
         _dragging = false;
@@ -739,6 +761,19 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             _pressWindowOrigin = new PointInt32(0, 0);
         }
+    }
+
+    /// <summary>True when the press landed on the bead at the window centre.
+    /// Hit-testing by distance instead of by element is deliberate: the ring's
+    /// inner radius follows the window size, so at small sizes the sectors
+    /// creep over the bead and claim the click.</summary>
+    private bool PressIsOnBead(PointerRoutedEventArgs e)
+    {
+        Windows.Foundation.Point p = e.GetCurrentPoint(RootGrid).Position;
+        double dx = p.X - (RootGrid.ActualWidth / 2);
+        double dy = p.Y - (RootGrid.ActualHeight / 2);
+        double limit = (ClosedSize / 2) + 12;
+        return ((dx * dx) + (dy * dy)) <= (limit * limit);
     }
 
     private static bool IsSectorSource(object? source)
@@ -768,7 +803,9 @@ public sealed partial class WidgetDrawerWindow : Window
         Windows.Foundation.Point current = e.GetCurrentPoint(RootGrid).Position;
         double dx = current.X - _pressPoint.X;
         double dy = current.Y - _pressPoint.Y;
-        if (!_dragging && Math.Abs(dx) < 6 && Math.Abs(dy) < 6)
+        // 5 DIP of travel starts a drag: 6 felt sticky on a 56 DIP bead and made
+        // the whole gesture read as a click.
+        if (!_dragging && ((dx * dx) + (dy * dy)) < 25)
         {
             return;
         }
@@ -804,7 +841,18 @@ public sealed partial class WidgetDrawerWindow : Window
         if (_dragging)
         {
             _dragging = false;
+            _centerPressWhileExpanded = false;
             SnapAndPersistPosition();
+            Animate(Ball, 1.0);
+            return;
+        }
+
+        if (_centerPressWhileExpanded)
+        {
+            // Click on the bead while the ring was open: collapse. The press
+            // path already returned, so no sector ever saw this gesture.
+            _centerPressWhileExpanded = false;
+            SetExpanded(false);
             Animate(Ball, 1.0);
             return;
         }
@@ -822,7 +870,9 @@ public sealed partial class WidgetDrawerWindow : Window
                 .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
                 .WorkArea;
             PointInt32 current = appWindow.Position;
-            int size = (int)Math.Round(ClosedSize * _scale);
+            SizeInt32 real = appWindow.Size;
+            int sizeW = real.Width > 0 ? real.Width : (int)Math.Round(ClosedSize * _scale);
+            int sizeH = real.Height > 0 ? real.Height : (int)Math.Round(ClosedSize * _scale);
             int margin = (int)Math.Round(ScreenMargin * _scale);
             int x = current.X;
             int y = current.Y;
@@ -831,23 +881,28 @@ public sealed partial class WidgetDrawerWindow : Window
             {
                 x = work.X + margin;
             }
-            else if (work.X + work.Width - (current.X + size) < EdgeSnapDistance)
+            else if (work.X + work.Width - (current.X + sizeW) < EdgeSnapDistance)
             {
-                x = work.X + work.Width - size - margin;
+                x = work.X + work.Width - sizeW - margin;
             }
 
             if (current.Y - work.Y < EdgeSnapDistance)
             {
                 y = work.Y + margin;
             }
-            else if (work.Y + work.Height - (current.Y + size) < EdgeSnapDistance)
+            else if (work.Y + work.Height - (current.Y + sizeH) < EdgeSnapDistance)
             {
-                y = work.Y + work.Height - size - margin;
+                y = work.Y + work.Height - sizeH - margin;
             }
 
             appWindow.Move(new PointInt32(x, y));
-            _settings.X = x;
-            _settings.Y = y;
+
+            // Persist the position of the *collapsed* window: a drag can happen
+            // while the ring is open, and saving that bigger window's origin
+            // made the bead reappear offset by half the ring on the next launch.
+            int closed = (int)Math.Round(ClosedSize * _scale);
+            _settings.X = x + ((sizeW - closed) / 2);
+            _settings.Y = y + ((sizeH - closed) / 2);
             _settings.Save();
         }
         catch (Exception ex)

@@ -456,6 +456,87 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
+    private async void GenerateCategoryWidgets_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string library = LibraryBox.Text.Trim().Trim('"');
+            if (library.Length == 0)
+            {
+                SaveMessage.Text = "先在上面选好共享库文件夹（并保存），再生成格子。";
+                return;
+            }
+
+            if (!_categoriesLoaded)
+            {
+                await LoadCategoriesAsync();
+            }
+
+            List<string> roots = new();
+            foreach ((string _, string dir) in _categories)
+            {
+                string first = dir.Split('/')[0].Trim();
+                if (first.Length > 0 && !roots.Contains(first))
+                {
+                    roots.Add(first);
+                }
+            }
+
+            if (roots.Count == 0)
+            {
+                SaveMessage.Text = "没拿到分类目录：管家引擎可能没在运行，重启 DeskBox 再试。";
+                return;
+            }
+
+            if (Application.Current is not App app || app.WidgetManager is not WidgetManager manager)
+            {
+                SaveMessage.Text = "格子管理器还没就绪，重启 DeskBox 再试。";
+                return;
+            }
+
+            HashSet<string> existing = new(StringComparer.OrdinalIgnoreCase);
+            foreach (DeskBox.Models.WidgetConfig widget in app.SettingsService.Settings.Widgets)
+            {
+                if (!string.IsNullOrWhiteSpace(widget.MappedFolderPath))
+                {
+                    existing.Add(Path.TrimEndingDirectorySeparator(widget.MappedFolderPath));
+                }
+            }
+
+            int created = 0;
+            int skipped = 0;
+            List<string> failed = new();
+            foreach (string name in roots)
+            {
+                string path = Path.TrimEndingDirectorySeparator(Path.Combine(library, name));
+                if (existing.Contains(path))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    Directory.CreateDirectory(path);
+                    await manager.CreateFolderWidgetAsync(path);
+                    created++;
+                }
+                catch (Exception ex)
+                {
+                    failed.Add(name + "：" + ex.Message);
+                }
+            }
+
+            SaveMessage.Text = failed.Count == 0
+                ? "已生成 " + created + " 个分类格子（已有 " + skipped + " 个跳过）。悬浮球展开就能看到。"
+                : "生成 " + created + " 个，跳过 " + skipped + " 个，失败 " + failed.Count + " 个：" + string.Join("；", failed);
+        }
+        catch (Exception ex)
+        {
+            SaveMessage.Text = "生成格子失败：" + ex.Message;
+        }
+    }
+
     private async void MoveSourceButton_Click(object sender, RoutedEventArgs e)
     {
         string source = SourcePathBox.Text.Trim().Trim('"');

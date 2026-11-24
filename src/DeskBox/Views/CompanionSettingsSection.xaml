@@ -147,6 +147,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="桌面文件夹" />
@@ -161,6 +162,12 @@
                            Text="共享库建议放在坚果云同步的文件夹里（例如 …\我的坚果云\教学资料库）。选完记得点下面的「保存设置」。" />
 
                 <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TrashText" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" Text="待删除目录：-" />
+
+                <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12">
+                    <Button Click="GenerateCategoryWidgets_Click" Content="按分类生成格子" />
+                    <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Style="{StaticResource SettingDescriptionTextStyle}"
+                               Text="把库里的 01…08 八个类别各建一个格子，悬浮球展开时就能看到它们。" />
+                </StackPanel>
             </Grid>
         </toolkit:SettingsCard>
 
