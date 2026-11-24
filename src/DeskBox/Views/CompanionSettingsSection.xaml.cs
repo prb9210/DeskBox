@@ -571,9 +571,16 @@ public sealed partial class CompanionSettingsSection : UserControl
                 roots.AddRange(FallbackCategoryRoots);
             }
 
-            if (Application.Current is not App app || app.WidgetManager is not WidgetManager manager)
+            if (Application.Current is not App app)
             {
-                GenerateWidgetsMessage.Text = "格子管理器还没就绪，重启 DeskBox 再试。";
+                GenerateWidgetsMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
+                return;
+            }
+
+            GenerateWidgetsMessage.Text = "正在等格子服务初始化…";
+            if (await AwaitWidgetManagerAsync() is not { } manager)
+            {
+                GenerateWidgetsMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
                 return;
             }
 
@@ -643,12 +650,20 @@ public sealed partial class CompanionSettingsSection : UserControl
         LayoutPushButton.IsEnabled = false;
         try
         {
-            LayoutMessage.Text = "正在推送本机布局…";
+            LayoutMessage.Text = "正在等格子服务初始化…";
             if (Application.Current is not App app)
             {
                 LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
                 return;
             }
+
+            if (await AwaitWidgetManagerAsync() is null)
+            {
+                LayoutMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
+                return;
+            }
+
+            LayoutMessage.Text = "正在推送本机布局…";
 
             string library = await ResolveLibraryFolderAsync();
             if (library.Length == 0)
@@ -675,12 +690,20 @@ public sealed partial class CompanionSettingsSection : UserControl
         LayoutPullButton.IsEnabled = false;
         try
         {
-            LayoutMessage.Text = "正在读取另一台的布局…";
+            LayoutMessage.Text = "正在等格子服务初始化…";
             if (Application.Current is not App app)
             {
                 LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
                 return;
             }
+
+            if (await AwaitWidgetManagerAsync() is null)
+            {
+                LayoutMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
+                return;
+            }
+
+            LayoutMessage.Text = "正在读取另一台的布局…";
 
             string library = await ResolveLibraryFolderAsync();
             if (library.Length == 0)
@@ -699,6 +722,26 @@ public sealed partial class CompanionSettingsSection : UserControl
         finally
         {
             LayoutPullButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>启动期格子管理器是最后一步创建的：设置页若从托盘提前打开，
+    /// 按一下就只会看到「还没就绪」。这里等到它就绪，而不是让用户去重启。</summary>
+    private static async Task<WidgetManager?> AwaitWidgetManagerAsync(int timeoutMs = 20000)
+    {
+        for (int waited = 0; ; waited += 200)
+        {
+            if (Application.Current is App { WidgetManager: { } manager })
+            {
+                return manager;
+            }
+
+            if (waited >= timeoutMs)
+            {
+                return null;
+            }
+
+            await Task.Delay(200);
         }
     }
 

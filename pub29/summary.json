@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-11-24T16:30:35.1756447Z",
+  "durationMilliseconds": 262662,
+  "productProfile": "retail",
+  "deploymentProfile": "full",
+  "smokeHarnessEnabled": false,
+  "selfContained": true,
+  "windowsAppSdkSelfContained": true,
+  "windowsAppRuntimeInsightsResource": {
+    "package": "Microsoft.WindowsAppSDK.Runtime/2.5.1",
+    "sourceArchive": "tools/MSIX/win10-x64/Microsoft.WindowsAppRuntime.2.msix",
+    "file": "Microsoft.WindowsAppRuntime.Insights.Resource.dll",
+    "bytes": 34104,
+    "sha256": "FD3B03BE01FCEC958CFABADCA9E1A301B4D15392DFB9B7C56A9907051D9A30BE"
+  },
+  "gitCommit": "14b9e5835a4a5edbc6bcae58e2744bfd204ef3e4",
+  "gitDirty": false,
+  "gitStatusEntries": [],
+  "workingTreeFingerprint": "01BA4719C80B6FE911B091A7C05124B64EEECE964E09C058EF8F9805DACA546B",
+  "sourceStableDuringPublish": true,
+  "dotnetHost": "C:\\Program Files\\dotnet\\dotnet.exe",
+  "dotnetSdkVersion": "10.0.404",
+  "configuration": "Release",
+  "platform": "x64",
+  "runtimeIdentifier": "win-x64",
+  "publishDirectory": "D:\\a\\DeskBox\\DeskBox\\.artifacts\\aot-retail\\win-x64\\publish",
+  "symbolsDirectory": "D:\\a\\DeskBox\\DeskBox\\.artifacts\\aot-retail\\win-x64\\symbols",
+  "installManifest": "D:\\a\\DeskBox\\DeskBox\\.artifacts\\aot-retail\\win-x64\\publish\\DeskBox.InstallManifest.txt",
+  "installManifestFileCount": 394,
+  "publishFileCount": 394,
+  "publishBytes": 141505615.0,
+  "symbolFileCount": 4,
+  "symbolBytes": 258416640.0,
+  "warningCodes": [
+    "CS0108",
+    "CS8601",
+    "CS8602",
+    "WMC1510"
+  ],
+  "allowedWarningCodes": [
+    "CS0108",
+    "CS0169",
+    "CS0414",
+    "CS8601",
+    "CS8602",
+    "WMC1510"
+  ],
+  "unexpectedWarningCodes": [],
+  "smokeHarnessSourceExclusions": [
+    "**\\*.Aot*Smoke.cs",
+    "Services\\Aot*Fixture.cs"
+  ],
+  "smokeHarnessScannedTokens": [
+    "DESKBOX_AOT_SHORTCUT_SMOKE",
+    "DESKBOX_AOT_SHELL_SMOKE",
+    "DESKBOX_AOT_QUICK_ACCESS_MUTATION_SMOKE",
+    "DESKBOX_AOT_MUSIC_VOLUME_READ_SMOKE",
+    "DESKBOX_AOT_MUSIC_VOLUME_MUTATION_SMOKE",
+    "DESKBOX_AOT_MUSIC_VOLUME_SESSION_MUTATION_SMOKE",
+    "DESKBOX_AOT_MANAGED_UI_SMOKE",
+    "DESKBOX_AOT_HOTKEY_SMOKE",
+    "DESKBOX_AOT_TODO_RECURRENCE_REMINDER_SMOKE",
+    "DESKBOX_AOT_TODO_NOTIFICATION_SMOKE",
+    "DESKBOX_AOT_TODO_NOTIFICATION_ACTIVATION_SMOKE",
+    "DESKBOX_AOT_TODO_NOTIFICATION_FORWARDING_SMOKE",
+    "DESKBOX_AOT_TODO_NOTIFICATION_SURFACE_SMOKE",
+    "DESKBOX_AOT_TODO_NOTIFICATION_USER_CLICK_SMOKE",
+    "AotManagedUiSmokeResult",
+    "AotWeatherSurfaceFixture",
+    "AotShellMoveFixture",
+    "AotFilePropertiesFixture"
+  ],
+  "smokeHarnessBinaryMatches": [],
+  "peFiles": [
+    {
+      "file": "DeskBox.exe",
+      "machine": "0x8664",
+      "bytes": 57365504,
+      "sha256": "F63E5687D2F6328C4B210F241987CCDC0BA7A18361661FDA05A6F228D3F2E04A"
+    },
+    {
+      "file": "DeskBox.Updater.exe",
+      "machine": "0x8664",
+      "bytes": 2598400,
+      "sha256": "15FE42C553D59B132F503D55C9F0B075E01FB1D2F368CD8ECF52B0C00C69BF41"
+    },
+    {
+      "file": "DeskBox.ThumbnailProxy.exe",
+      "machine": "0x8664",
+      "bytes": 359424,
+      "sha256": "7CA3ABCB11C7D1AD1ABB4898E4D0E3B4C12DA605E9D251F2A7A7F8F8D9BF3193"
+    },
+    {
+      "file": "deskbox_native.dll",
+      "machine": "0x8664",
+      "bytes": 246784,
+      "sha256": "DE436DF8C634BC2AE1140D848E88F43E7CA5C440CDB5836C4159080EE3B6B3D0"
+    },
+    {
+      "file": "EverythingSdk.dll",
+      "machine": "0x8664",
+      "bytes": 91304,
+      "sha256": "81B5BE18126ACD2C2B913F8F4A821E476B18393CDD3DEBD03387C50AFD8DB88F"
+    },
+    {
+      "file": "Microsoft.WindowsAppRuntime.Insights.Resource.dll",
+      "machine": "0x8664",
+      "bytes": 34104,
+      "sha256": "FD3B03BE01FCEC958CFABADCA9E1A301B4D15392DFB9B7C56A9907051D9A30BE"
+    }
+  ],
+  "rustNative": {
+    "abiVersion": 2,
+    "capabilities": 511,
+    "publishMatchesStaging": true,
+    "sha256": "DE436DF8C634BC2AE1140D848E88F43E7CA5C440CDB5836C4159080EE3B6B3D0"
+  }
+}
