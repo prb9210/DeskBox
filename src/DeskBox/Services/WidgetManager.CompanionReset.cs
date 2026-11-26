@@ -319,7 +319,7 @@ public sealed partial class WidgetManager
             }
         }
 
-        List<WidgetConfig> candidates = GetCapsuleArrangementCandidates(settings).ToList();
+        List<WidgetConfig> candidates = GetColumnCandidates(settings).Capsules.ToList();
         if (candidates.Count == 0)
         {
             return 0;
@@ -491,7 +491,9 @@ public sealed partial class WidgetManager
         _lastCapsuleBarDirection = SettingsService.WidgetCapsuleBarDirectionVertical;
         _lastCapsuleBarSpacing = spacingLogical;
         _lastCapsuleArrangementMemberSignature = string.Join('|', candidates.Select(config => config.Id));
-        _lastCapsuleBarGeometrySignature = BuildCapsuleBarGeometrySignature(settings, candidates);
+        _lastCapsuleBarGeometrySignature = BuildCapsuleBarGeometrySignature(
+            settings,
+            candidates.Select(config => new ColumnMember(config, IsExpandedSlot: false)).ToList());
 
         _settingsService.SaveDebounced(notifySubscribers: false);
         NoteWidgetWindowsMoved();

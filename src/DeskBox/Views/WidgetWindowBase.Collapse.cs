@@ -3140,6 +3140,9 @@ public abstract partial class WidgetWindowBase
             SettingsService.UpdateWidget(Config, notifySubscribers: false);
             SettingsService.SaveDebounced(notifySubscribers: false);
             SynchronizeWidgetGroupLayout();
+            // 点开的卡片要按列宽占一格，下面的格子跟着让位（收起时再收回）。
+            App.Current?.WidgetManager?.ScheduleCapsuleArrangementConsistencyCheck(
+                collapsed ? "capsule-collapsed" : "capsule-expanded");
         }
 
         string contentMode = SettingsService.Settings.WidgetCompactContentMode;

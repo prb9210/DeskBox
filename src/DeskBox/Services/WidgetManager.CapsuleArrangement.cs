@@ -142,9 +142,16 @@ public sealed partial class WidgetManager
             settings.WidgetCapsuleBarDirection);
         double spacing = SettingsService.NormalizeWidgetCapsuleBarSpacing(
             settings.WidgetCapsuleBarSpacing);
-        IReadOnlyList<WidgetConfig> candidates = GetCapsuleArrangementCandidates(settings);
-        string memberSignature = string.Join('|', candidates.Select(config => config.Id));
-        string geometrySignature = BuildCapsuleBarGeometrySignature(settings, candidates);
+        // 胶囊候选 + 常开/点开的展开卡片：两种成员都占这一列的一格。
+        (IReadOnlyList<WidgetConfig> capsuleCandidates, IReadOnlyList<WidgetConfig> expandedMembers) =
+            GetColumnCandidates(settings);
+        var columnMembers = capsuleCandidates
+            .Select(config => new ColumnMember(config, IsExpandedSlot: false))
+            .Concat(expandedMembers.Select(config => new ColumnMember(config, IsExpandedSlot: true)))
+            .ToList();
+        string memberSignature = string.Join('|', columnMembers.Select(member =>
+            member.IsExpandedSlot ? $"{member.Config.Id}*" : member.Config.Id));
+        string geometrySignature = BuildCapsuleBarGeometrySignature(settings, columnMembers);
         if (!force &&
             string.Equals(mode, _lastEffectiveCapsuleArrangementMode, StringComparison.Ordinal) &&
             string.Equals(placement, _lastCapsuleBarPlacement, StringComparison.Ordinal) &&
@@ -190,7 +197,7 @@ public sealed partial class WidgetManager
                 bool rebuildOrder = previousMode == SettingsService.WidgetCapsuleArrangementFree;
                 changed |= ArrangeCapsuleCandidates(
                     settings,
-                    candidates,
+                    columnMembers,
                     placement,
                     direction,
                     spacing,
@@ -576,34 +583,62 @@ public sealed partial class WidgetManager
             _settingsService.Settings.WidgetCapsuleArrangementMode);
     }
 
-    private IReadOnlyList<WidgetConfig> GetCapsuleArrangementCandidates(AppSettings settings)
+    /// <summary>
+    /// 整列成员：普通胶囊，以及常开（CollapseBehavior=Expanded）或用户手动点开
+    /// （Click 且 IsCollapsed=false）的卡片——后者按展开尺寸占一格。
+    /// Smart/System 的悬停展开不落盘，不占格，否则鼠标划过整列会抖。
+    /// </summary>
+    private (IReadOnlyList<WidgetConfig> Capsules, IReadOnlyList<WidgetConfig> Expanded) GetColumnCandidates(
+        AppSettings settings)
     {
-        return settings.Widgets
-            .Where(config =>
-                config.IsVisible &&
-                !config.IsDisabled &&
-                WidgetGroupSettings.IsActiveMember(settings, config.Id) &&
-                _widgetRegistry.IsAvailableForSession(config, settings) &&
-                WidgetCollapseBehaviorNames.Resolve(
-                    config,
-                    settings.WidgetCollapseBehavior) !=
-                    WidgetCollapseBehavior.Expanded)
-            .ToList();
+        var capsules = new List<WidgetConfig>();
+        var expanded = new List<WidgetConfig>();
+        foreach (WidgetConfig config in settings.Widgets.Where(config =>
+                     config.IsVisible &&
+                     !config.IsDisabled &&
+                     WidgetGroupSettings.IsActiveMember(settings, config.Id) &&
+                     _widgetRegistry.IsAvailableForSession(config, settings)))
+        {
+            WidgetCollapseBehavior behavior = WidgetCollapseBehaviorNames.Resolve(
+                config,
+                settings.WidgetCollapseBehavior);
+            bool expandedSlot = behavior == WidgetCollapseBehavior.Expanded ||
+                (behavior == WidgetCollapseBehavior.Click && !config.IsCollapsed);
+            if (expandedSlot)
+            {
+                expanded.Add(config);
+            }
+            else
+            {
+                capsules.Add(config);
+            }
+        }
+
+        return (capsules, expanded);
     }
+
+    /// <summary>
+    /// 一个竖向列里的成员：普通胶囊，或常开/点开、按展开尺寸占位的卡片。
+    /// </summary>
+    private readonly record struct ColumnMember(WidgetConfig Config, bool IsExpandedSlot);
 
     private static string BuildCapsuleBarGeometrySignature(
         AppSettings settings,
-        IReadOnlyList<WidgetConfig> candidates)
+        IReadOnlyList<ColumnMember> candidates)
     {
         string widthMode = SettingsService.NormalizeWidgetCompactWidthMode(
             settings.WidgetCompactWidthMode);
         bool usesAlignedWidth = widthMode == SettingsService.WidgetCompactWidthModeAligned;
-        string candidateWidths = string.Join(';', candidates.Select(config =>
+        string candidateWidths = string.Join(';', candidates.Select(member =>
         {
+            WidgetConfig config = member.Config;
             string width = usesAlignedWidth
                 ? config.Width.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
                 : config.CompactWidth?.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "auto";
-            return $"{config.Id}:{config.WidgetKind}:{width}";
+            string slot = member.IsExpandedSlot
+                ? "e" + config.Height.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
+                : "c";
+            return $"{config.Id}:{config.WidgetKind}:{width}:{slot}";
         }));
         return string.Join(
             '|',
@@ -636,32 +671,43 @@ public sealed partial class WidgetManager
 
     private bool ArrangeCapsuleCandidates(
         AppSettings settings,
-        IReadOnlyList<WidgetConfig> candidates,
+        IReadOnlyList<ColumnMember> members,
         string placement,
         string configuredDirection,
         double logicalSpacing,
         bool rebuildOrder)
     {
         bool changed = false;
-        var resolvedById = candidates.ToDictionary(
-            config => config.Id,
-            config => ResolveCandidate(config),
+        List<string> barOrder = settings.WidgetCapsuleBarOrder;
+        var resolvedById = members.ToDictionary(
+            member => member.Config.Id,
+            member => ResolveColumnCandidate(member),
             StringComparer.Ordinal);
-        foreach (ResolvedCapsuleCandidate candidate in resolvedById.Values)
+        HashSet<string> expandedIds = members
+            .Where(member => member.IsExpandedSlot)
+            .Select(member => member.Config.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (ColumnMember member in members)
         {
-            if (!settings.WidgetCapsuleFreePlacements.ContainsKey(candidate.Config.Id))
+            if (member.IsExpandedSlot)
             {
-                settings.WidgetCapsuleFreePlacements[candidate.Config.Id] =
-                    candidate.Config.CompactPlacement is { } freePlacement
+                // 展开卡片是用户自己的窗口，不进「浮动胶囊」的位置备份。
+                continue;
+            }
+
+            if (!settings.WidgetCapsuleFreePlacements.ContainsKey(member.Config.Id))
+            {
+                settings.WidgetCapsuleFreePlacements[member.Config.Id] =
+                    member.Config.CompactPlacement is { } freePlacement
                         ? ClonePlacement(freePlacement)
-                        : CreatePlacement(candidate.Bounds);
+                        : CreatePlacement(resolvedById[member.Config.Id].Bounds);
                 changed = true;
             }
         }
 
         if (rebuildOrder)
         {
-            settings.WidgetCapsuleBarOrder.RemoveAll(resolvedById.ContainsKey);
+            barOrder.RemoveAll(resolvedById.ContainsKey);
             foreach (ResolvedCapsuleCandidate candidate in resolvedById.Values
                          .OrderBy(item => FormatWorkAreaKey(item.WorkArea), StringComparer.Ordinal)
                          .ThenBy(item => ResolveBarDirection(configuredDirection, placement, item.WorkArea) ==
@@ -673,24 +719,53 @@ public sealed partial class WidgetManager
                                  ? item.Bounds.Y
                                  : item.Bounds.X))
             {
-                settings.WidgetCapsuleBarOrder.Add(candidate.Config.Id);
+                barOrder.Add(candidate.Config.Id);
             }
 
             changed = true;
         }
         else
         {
-            foreach (WidgetConfig config in candidates)
+            foreach (ColumnMember member in members)
             {
-                if (!settings.WidgetCapsuleBarOrder.Contains(config.Id, StringComparer.Ordinal))
+                if (member.IsExpandedSlot ||
+                    barOrder.Contains(member.Config.Id, StringComparer.Ordinal))
                 {
-                    settings.WidgetCapsuleBarOrder.Add(config.Id);
-                    changed = true;
+                    continue;
                 }
+
+                barOrder.Add(member.Config.Id);
+                changed = true;
+            }
+
+            // 展开卡片也要占一格：缺队列条目时按它此刻在屏幕上的上下位置插进去，
+            // 一律追加到末尾会让「点开」直接跳到整列最下面。
+            foreach (string id in expandedIds
+                         .Where(id => !barOrder.Contains(id, StringComparer.Ordinal))
+                         .ToList())
+            {
+                int orderIndex = barOrder.Count;
+                if (resolvedById.TryGetValue(id, out ResolvedCapsuleCandidate? self))
+                {
+                    for (int index = 0; index < barOrder.Count; index++)
+                    {
+                        if (resolvedById.TryGetValue(
+                                barOrder[index],
+                                out ResolvedCapsuleCandidate? other) &&
+                            other.Bounds.Y > self.Bounds.Y)
+                        {
+                            orderIndex = index;
+                            break;
+                        }
+                    }
+                }
+
+                barOrder.Insert(orderIndex, id);
+                changed = true;
             }
         }
 
-        var orderedCandidates = settings.WidgetCapsuleBarOrder
+        var orderedCandidates = barOrder
             .Where(resolvedById.ContainsKey)
             .Select(id => resolvedById[id])
             .ToList();
@@ -699,14 +774,28 @@ public sealed partial class WidgetManager
                      candidate => FormatWorkAreaKey(candidate.WorkArea),
                      StringComparer.Ordinal))
         {
-            List<ResolvedCapsuleCandidate> members = group.ToList();
-            if (members.Count == 0)
+            List<ResolvedCapsuleCandidate> groupMembers = group.ToList();
+            if (groupMembers.Count == 0)
             {
                 continue;
             }
 
-            ResolvedCapsuleCandidate first = members[0];
+            ResolvedCapsuleCandidate first = groupMembers[0];
             string direction = ResolveBarDirection(configuredDirection, placement, first.WorkArea);
+            // 只有竖列能「占一格、下面的让位」。横排里展开卡片仍然独立摆放，
+            // 免得把一整行撑得歪掉。
+            List<ResolvedCapsuleCandidate> columnMembers =
+                direction == SettingsService.WidgetCapsuleBarDirectionVertical
+                    ? groupMembers
+                    : groupMembers
+                        .Where(item => !expandedIds.Contains(item.Config.Id))
+                        .ToList();
+            if (columnMembers.Count == 0)
+            {
+                continue;
+            }
+
+            first = columnMembers[0];
             (PointInt32 anchorPoint, string anchor) = ResolveBarAnchor(
                 first.Bounds,
                 first.Config.CompactPlacement?.PositionAnchor ?? first.Config.PositionAnchor,
@@ -714,7 +803,7 @@ public sealed partial class WidgetManager
                 placement);
             double dpiScale = WidgetPositioningService.GetDpiScale(first.WorkArea);
             int physicalSpacing = Math.Max(0, (int)Math.Round(logicalSpacing * dpiScale));
-            var items = members
+            var items = columnMembers
                 .Select(member => new WidgetCapsuleArrangementItem(
                     member.Config.Id,
                     member.Bounds.Width,
@@ -729,15 +818,40 @@ public sealed partial class WidgetManager
                     direction,
                     physicalSpacing);
 
-            foreach (ResolvedCapsuleCandidate member in members)
+            foreach (ResolvedCapsuleCandidate member in columnMembers)
             {
                 RectInt32 target = arranged[member.Config.Id];
                 _lastCapsuleBarBounds[member.Config.Id] = target;
-                if (!BoundsEqual(member.Bounds, target))
+                bool expandedSlot = expandedIds.Contains(member.Config.Id);
+                bool moved = !BoundsEqual(member.Bounds, target);
+                if (moved)
                 {
+                    if (expandedSlot)
+                    {
+                        // 展开卡片按列宽排进队列：宽高和位置都交给这一列，
+                        // 让位由同一趟排布完成（CommitUserPlacement 会写回
+                        // 锚点与 X/Y/宽/高，但不碰展开态）。
+                        CommitUserPlacement(
+                            member.Config,
+                            target,
+                            target,
+                            WidgetPlacementSource.CapsuleBarDrag,
+                            captureIntent: true);
+                    }
+
                     member.Config.CompactPlacement = CreatePlacement(target);
                     SynchronizeGroupLayoutFromMember(member.Config);
                     changed = true;
+                }
+
+                if (expandedSlot)
+                {
+                    if (moved)
+                    {
+                        FindLoadedWindow(member.Config.Id)?.RestoreBoundsForCurrentTopology();
+                    }
+
+                    continue;
                 }
 
                 FindLoadedWindow(member.Config.Id)?.ApplyCompactArrangement(
@@ -786,6 +900,21 @@ public sealed partial class WidgetManager
         }
 
         return changed;
+    }
+
+    private ResolvedCapsuleCandidate ResolveColumnCandidate(ColumnMember member)
+    {
+        if (!member.IsExpandedSlot)
+        {
+            return ResolveCandidate(member.Config);
+        }
+
+        // 展开卡片按它自己的展开几何量尺寸，胶囊那套 compact 宽高对它没意义。
+        RectInt32 bounds = WidgetPositioningService.ResolveBoundsForCurrentTopology(member.Config);
+        RectInt32 workArea = DisplayArea.GetFromRect(
+            bounds,
+            DisplayAreaFallback.Nearest).WorkArea;
+        return new ResolvedCapsuleCandidate(member.Config, bounds, workArea);
     }
 
     private ResolvedCapsuleCandidate ResolveCandidate(WidgetConfig config)
