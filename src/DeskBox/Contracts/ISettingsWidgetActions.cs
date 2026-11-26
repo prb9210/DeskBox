@@ -177,4 +177,28 @@ public interface ISettingsWidgetActions
         nint ownerWindowHandle);
 
     Task<DesktopOrganizationUndoResult> AbandonDesktopOrganizationUndoAsync(string historyId);
+
+    // ── Companion (桌面管家) ────────────────────────────────────────
+
+    /// <summary>
+    /// Creates one folder widget per library path. The settings UI runs in
+    /// its own process with NO widget manager, so this call must reach the
+    /// main process — a host-local manager lookup can only ever time out.
+    /// Each path reports its own outcome; an existing widget for the same
+    /// folder comes back as a failed entry carrying the conflict reason.
+    /// </summary>
+    Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(
+        IReadOnlyList<string> folderPaths);
+
+    /// <summary>Pushes this machine's logical layout to the engine.</summary>
+    Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder);
+
+    /// <summary>Applies the other machine's logical layout (same step 1 model).</summary>
+    Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder);
 }
+
+/// <summary>Per-folder outcome of a companion "按分类生成格子" batch.</summary>
+public sealed record FolderWidgetCreateResult(string FolderPath, bool Created, string? Error = null);
+
+/// <summary>Result of a manual layout push/pull, shaped for the wire.</summary>
+public sealed record LayoutTransferResult(bool Ok, string Message);

@@ -197,6 +197,13 @@ public sealed class LayoutWriteSyncTests : IDisposable
         public Models.OrganizationHistoryEntry? GetDesktopOrganizationHistoryEntry(string historyId) => null;
         public Task<DesktopOrganizationUndoResult> UndoDesktopOrganizationAsync(string historyId, nint ownerWindowHandle) => throw new NotImplementedException();
         public Task<DesktopOrganizationUndoResult> AbandonDesktopOrganizationUndoAsync(string historyId) => throw new NotImplementedException();
+        public Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(IReadOnlyList<string> folderPaths) =>
+            Task.FromResult<IReadOnlyList<FolderWidgetCreateResult>>(
+                folderPaths.Select(path => new FolderWidgetCreateResult(path, true)).ToList());
+        public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
+            Task.FromResult(new LayoutTransferResult(true, "pushed"));
+        public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
+            Task.FromResult(new LayoutTransferResult(true, "pulled"));
     }
 
     public void Dispose()

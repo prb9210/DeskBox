@@ -113,6 +113,11 @@ public sealed class SettingsIpcClient : IAsyncDisposable
             [SettingsIpcMethods.WidgetDeleteOrphan] = TimeSpan.FromMinutes(10),
             [SettingsIpcMethods.CloudDeleteSnapshot] = TimeSpan.FromMinutes(2),
             [SettingsIpcMethods.DataQuickCaptureCacheCleanup] = TimeSpan.FromMinutes(2),
+            // Companion: creating eight widgets one by one boots windows and
+            // animations; the manual layout transfer hits the engine over HTTP.
+            [SettingsIpcMethods.CompanionCreateFolderWidgets] = TimeSpan.FromMinutes(3),
+            [SettingsIpcMethods.CompanionLayoutPush] = TimeSpan.FromMinutes(2),
+            [SettingsIpcMethods.CompanionLayoutPull] = TimeSpan.FromMinutes(3),
             // Deep review R13: long-task stragglers the R3/R9 sweeps missed,
             // graded by the same rule as their families. Inventory walks
             // every snapshot zip's manifest; orphan discovery recursively

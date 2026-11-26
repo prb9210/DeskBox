@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using DeskBox.Contracts;
 using DeskBox.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -577,10 +578,13 @@ public sealed partial class CompanionSettingsSection : UserControl
                 return;
             }
 
-            GenerateWidgetsMessage.Text = "正在等格子服务初始化…";
-            if (await AwaitWidgetManagerAsync() is not { } manager)
+            // 4) 生成：走 ISettingsWidgetActions。设置窗口跑在独立的设置进程里，
+            //    那边永远没有 WidgetManager —— 直接等 App.WidgetManager 只会空等
+            //    20 秒。宿主把这一调用转给主进程执行。
+            if (_widgetActions is not { } widgetActions)
             {
-                GenerateWidgetsMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
+                GenerateWidgetsMessage.Text =
+                    "格子服务没接上：请关闭设置窗口（Esc）后重新打开，再点一次。";
                 return;
             }
 
@@ -593,9 +597,9 @@ public sealed partial class CompanionSettingsSection : UserControl
                 }
             }
 
-            int created = 0;
             int skipped = 0;
-            List<string> failed = new();
+            List<string> missing = new();
+            Dictionary<string, string> nameByPath = new(StringComparer.OrdinalIgnoreCase);
             foreach (string name in roots)
             {
                 string path = NormalizeFolderPath(Path.Combine(library, name));
@@ -608,19 +612,49 @@ public sealed partial class CompanionSettingsSection : UserControl
                 try
                 {
                     Directory.CreateDirectory(path);
-                    await manager.CreateFolderWidgetAsync(path);
-                    existing.Add(path);
-                    created++;
                 }
                 catch (Exception ex)
                 {
-                    failed.Add(name + "：" + ex.Message);
+                    nameByPath[path] = name + "（目录不可用：" + ex.Message + "）";
+                    missing.Add(path);
+                    continue;
+                }
+
+                nameByPath[path] = name;
+                missing.Add(path);
+            }
+
+            if (missing.Count == 0)
+            {
+                GenerateWidgetsMessage.Text = "没有新建：这些分类都已有格子（" +
+                    skipped + " 个跳过）。展开悬浮球就能看到。";
+                return;
+            }
+
+            GenerateWidgetsMessage.Text = "正在生成 " + missing.Count + " 个分类格子…";
+            IReadOnlyList<FolderWidgetCreateResult> results =
+                await widgetActions.CreateFolderWidgetsAsync(missing);
+
+            List<string> created = new();
+            List<string> failed = new();
+            foreach (FolderWidgetCreateResult result in results)
+            {
+                string label = nameByPath.TryGetValue(result.FolderPath, out string? name)
+                    ? name
+                    : Path.GetFileName(result.FolderPath);
+                if (result.Created)
+                {
+                    created.Add(label);
+                }
+                else
+                {
+                    failed.Add(label + "：" + (result.Error ?? "未知原因"));
                 }
             }
 
-            string summary = created > 0
-                ? "已生成 " + created + " 个分类格子"
-                : "没有新建：这些分类都已有格子";
+            string summary = created.Count > 0
+                ? "已生成 " + created.Count + " 个分类格子"
+                : "没有生成任何格子";
 
             if (skipped > 0)
             {
@@ -650,16 +684,9 @@ public sealed partial class CompanionSettingsSection : UserControl
         LayoutPushButton.IsEnabled = false;
         try
         {
-            LayoutMessage.Text = "正在等格子服务初始化…";
-            if (Application.Current is not App app)
+            if (_widgetActions is not { } widgetActions)
             {
-                LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
-                return;
-            }
-
-            if (await AwaitWidgetManagerAsync() is null)
-            {
-                LayoutMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
+                LayoutMessage.Text = "格子服务没接上：请关闭设置窗口（Esc）后重新打开，再点一次。";
                 return;
             }
 
@@ -672,7 +699,8 @@ public sealed partial class CompanionSettingsSection : UserControl
                 return;
             }
 
-            LayoutSyncService.Result result = await LayoutSyncService.PushAsync(app, library);
+            // 布局属于主进程的格子管理器；设置进程只负责发起与显示结果。
+            LayoutTransferResult result = await widgetActions.PushLayoutAsync(library);
             LayoutMessage.Text = result.Message;
         }
         catch (Exception ex)
@@ -690,16 +718,9 @@ public sealed partial class CompanionSettingsSection : UserControl
         LayoutPullButton.IsEnabled = false;
         try
         {
-            LayoutMessage.Text = "正在等格子服务初始化…";
-            if (Application.Current is not App app)
+            if (_widgetActions is not { } widgetActions)
             {
-                LayoutMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
-                return;
-            }
-
-            if (await AwaitWidgetManagerAsync() is null)
-            {
-                LayoutMessage.Text = "格子服务 20 秒内没起来，请重启 DeskBox 再试。";
+                LayoutMessage.Text = "格子服务没接上：请关闭设置窗口（Esc）后重新打开，再点一次。";
                 return;
             }
 
@@ -712,7 +733,7 @@ public sealed partial class CompanionSettingsSection : UserControl
                 return;
             }
 
-            LayoutSyncService.Result result = await LayoutSyncService.PullAsync(app, library);
+            LayoutTransferResult result = await widgetActions.PullLayoutAsync(library);
             LayoutMessage.Text = result.Message;
         }
         catch (Exception ex)
@@ -725,24 +746,18 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
-    /// <summary>启动期格子管理器是最后一步创建的：设置页若从托盘提前打开，
-    /// 按一下就只会看到「还没就绪」。这里等到它就绪，而不是让用户去重启。</summary>
-    private static async Task<WidgetManager?> AwaitWidgetManagerAsync(int timeoutMs = 20000)
+    /// <summary>
+    /// The widget facade injected by the hosting settings window. It is the
+    /// settings host's remote facade over the IPC pipe, so "按分类生成格子"
+    /// and the layout buttons execute in the MAIN process — the host process
+    /// never owns a WidgetManager (waiting for one here could only time out).
+    /// </summary>
+    private ISettingsWidgetActions? _widgetActions;
+
+    public void Configure(ISettingsWidgetActions widgetActions, IntPtr ownerHandle)
     {
-        for (int waited = 0; ; waited += 200)
-        {
-            if (Application.Current is App { WidgetManager: { } manager })
-            {
-                return manager;
-            }
-
-            if (waited >= timeoutMs)
-            {
-                return null;
-            }
-
-            await Task.Delay(200);
-        }
+        _widgetActions = widgetActions;
+        OwnerHandle = ownerHandle;
     }
 
     /// <summary>共享库路径：输入框 → 引擎状态 → 引擎 config.json。</summary>

@@ -30,8 +30,26 @@ public sealed partial class CompanionPanelWindow : Window
             AppWindow appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hWnd));
             appWindow.Resize(new SizeInt32(960, 880));
             AppBranding.ApplyWindowIcon(appWindow);
-            // The section's file/folder pickers must be owner-attached.
-            Section.OwnerHandle = hWnd;
+            // The section's file/folder pickers must be owner-attached, and
+            // the companion buttons need a widget facade: this panel lives in
+            // the MAIN process (unlike the settings host), so hand it the
+            // in-process implementation instead of leaving the buttons to
+            // report "格子服务没接上".
+            if (Application.Current is App app)
+            {
+                Section.Configure(
+                    new InProcessSettingsWidgetActions(
+                        app.WidgetManager,
+                        app.SettingsService,
+                        app.FileService,
+                        app.OrganizerService,
+                        app.LocalizationService),
+                    hWnd);
+            }
+            else
+            {
+                Section.OwnerHandle = hWnd;
+            }
         }
         catch (Exception)
         {

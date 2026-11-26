@@ -3,6 +3,7 @@
 using System.Threading;
 using DeskBox.Contracts;
 using DeskBox.Models;
+using Microsoft.UI.Xaml;
 
 /// <summary>
 /// In-process default of <see cref="ISettingsWidgetActions"/>: a thin wrapper
@@ -552,5 +553,65 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
                 DesktopOrganizationUndoOutcome.Failed,
                 Error: ex.Message);
         }
+    }
+
+    // ── Companion (桌面管家) ────────────────────────────────────────
+
+    /// <summary>
+    /// Creates the folder widgets on the UI thread, one path at a time so a
+    /// single conflict (a widget already pointing at that folder) cannot
+    /// abort the whole batch.
+    /// </summary>
+    public async Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(
+        IReadOnlyList<string> folderPaths)
+    {
+        if (_widgetManager is not { } manager)
+        {
+            return folderPaths
+                .Select(path => new FolderWidgetCreateResult(path, false, "格子管理器还没就绪"))
+                .ToList();
+        }
+
+        var results = new List<FolderWidgetCreateResult>(folderPaths.Count);
+        foreach (string path in folderPaths)
+        {
+            try
+            {
+                await DeskBox.Platform.UiDispatch.RunAsync(
+                    () => manager.CreateFolderWidgetAsync(path));
+                results.Add(new FolderWidgetCreateResult(path, true));
+            }
+            catch (Exception ex)
+            {
+                App.Log($"[Companion] Create folder widget failed for {path}: {ex.Message}");
+                results.Add(new FolderWidgetCreateResult(path, false, ex.Message));
+            }
+        }
+
+        return results;
+    }
+
+    public async Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder)
+    {
+        if (Application.Current is not App app || app.WidgetManager is null)
+        {
+            return new LayoutTransferResult(false, "格子管理器还没就绪，请稍后重试。");
+        }
+
+        LayoutSyncService.Result result = await DeskBox.Platform.UiDispatch.RunAsync(
+            () => LayoutSyncService.PushAsync(app, libraryFolder));
+        return new LayoutTransferResult(result.Ok, result.Message);
+    }
+
+    public async Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder)
+    {
+        if (Application.Current is not App app || app.WidgetManager is null)
+        {
+            return new LayoutTransferResult(false, "格子管理器还没就绪，请稍后重试。");
+        }
+
+        LayoutSyncService.Result result = await DeskBox.Platform.UiDispatch.RunAsync(
+            () => LayoutSyncService.PullAsync(app, libraryFolder));
+        return new LayoutTransferResult(result.Ok, result.Message);
     }
 }

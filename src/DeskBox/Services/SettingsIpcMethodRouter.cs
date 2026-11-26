@@ -390,6 +390,33 @@ public sealed class SettingsIpcMethodRouter
                 if (_settings is null) return unavailable(method);
                 return (true, SerializeLayout(_settings), null);
 
+            // ── Companion (桌面管家) ────────────────────────────────
+            // These three exist because the settings host has no widget
+            // manager: without them the buttons in the 桌面管家 page can
+            // only wait 20 s and tell the user to restart.
+            case SettingsIpcMethods.CompanionCreateFolderWidgets:
+                if (_widget is null) return unavailable(method);
+                List<string>? folderPaths = SettingsIpcPayload.Decode(
+                    payload, SettingsIpcJsonContext.Default.ListString);
+                if (folderPaths is null) return (false, null, "missing payload");
+                IReadOnlyList<FolderWidgetCreateResult> createResults =
+                    await _widget.CreateFolderWidgetsAsync(folderPaths);
+                return (true, SettingsIpcPayload.Encode(
+                    createResults.ToList(),
+                    SettingsIpcJsonContext.Default.ListFolderWidgetCreateResult), null);
+
+            case SettingsIpcMethods.CompanionLayoutPush:
+                if (_widget is null) return unavailable(method);
+                return (true, SettingsIpcPayload.Encode(
+                    await _widget.PushLayoutAsync(payload ?? string.Empty),
+                    SettingsIpcJsonContext.Default.LayoutTransferResult), null);
+
+            case SettingsIpcMethods.CompanionLayoutPull:
+                if (_widget is null) return unavailable(method);
+                return (true, SettingsIpcPayload.Encode(
+                    await _widget.PullLayoutAsync(payload ?? string.Empty),
+                    SettingsIpcJsonContext.Default.LayoutTransferResult), null);
+
             case SettingsIpcMethods.WidgetSyncFeatureEnabled:
                 if (_widget is null) return unavailable(method);
                 SettingsIpcKindArg sync = DecodeKindArg(payload);

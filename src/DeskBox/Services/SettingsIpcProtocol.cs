@@ -271,6 +271,20 @@ public static class SettingsIpcMethods
     /// its mirror so every layout-reading surface sees live state.
     /// </summary>
     public const string LayoutChanged = "layout-changed";
+
+    // ── Companion (桌面管家) commands ──────────────────────────────
+    // The settings UI only ever runs in the settings host, which owns no
+    // widget manager: these three are the only channel that can create a
+    // grid or move a layout, and they must always run in the main process.
+
+    /// <summary>payload = List&lt;string&gt; folder paths; response = List&lt;FolderWidgetCreateResult&gt;.</summary>
+    public const string CompanionCreateFolderWidgets = "companion.create-folder-widgets";
+
+    /// <summary>payload = library folder path; response = LayoutTransferResult.</summary>
+    public const string CompanionLayoutPush = "companion.layout-push";
+
+    /// <summary>payload = library folder path; response = LayoutTransferResult.</summary>
+    public const string CompanionLayoutPull = "companion.layout-pull";
 }
 
 /// <summary>
@@ -424,6 +438,9 @@ public static class SettingsIpcPayload
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(OrganizationHistoryEntry))]
 [JsonSerializable(typeof(DesktopOrganizationUndoResult))]
+[JsonSerializable(typeof(FolderWidgetCreateResult))]
+[JsonSerializable(typeof(List<FolderWidgetCreateResult>))]
+[JsonSerializable(typeof(LayoutTransferResult))]
 [JsonSerializable(typeof(AppRelaunchScheduleResult))]
 [JsonSerializable(typeof(AppRuntimeHealthSnapshot))]
 [JsonSerializable(typeof(AppUpdateManifest))]

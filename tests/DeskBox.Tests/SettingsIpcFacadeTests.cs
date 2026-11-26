@@ -673,6 +673,17 @@ public sealed class SettingsIpcFacadeTests : IDisposable
 
         public Task<DesktopOrganizationUndoResult> AbandonDesktopOrganizationUndoAsync(string historyId) =>
             Task.FromResult(new DesktopOrganizationUndoResult(DesktopOrganizationUndoOutcome.Completed));
+
+        public Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(
+            IReadOnlyList<string> folderPaths) =>
+            Task.FromResult<IReadOnlyList<FolderWidgetCreateResult>>(
+                folderPaths.Select(path => new FolderWidgetCreateResult(path, true)).ToList());
+
+        public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
+            Task.FromResult(new LayoutTransferResult(true, "pushed"));
+
+        public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
+            Task.FromResult(new LayoutTransferResult(true, "pulled"));
     }
 
     private sealed class FakeAppActions : ISettingsAppActions

@@ -460,6 +460,76 @@ public sealed class RemoteSettingsWidgetActions : ISettingsWidgetActions
                     Error: "abandon request failed");
     }
 
+    // ── Companion (桌面管家) ────────────────────────────────────────
+
+    /// <summary>
+    /// Batched folder-widget creation. One round trip (the main side creates
+    /// them one by one on its UI thread) so the 15 s default ceiling is not
+    /// paid per grid; the response carries a per-path outcome.
+    /// </summary>
+    public async Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(
+        IReadOnlyList<string> folderPaths)
+    {
+        try
+        {
+            (bool ok, string? payload, string? error) = await _client.RequestAsync(
+                SettingsIpcMethods.CompanionCreateFolderWidgets,
+                SettingsIpcPayload.Encode(
+                    folderPaths.ToList(),
+                    SettingsIpcJsonContext.Default.ListString));
+            if (ok && SettingsIpcPayload.Decode(
+                    payload,
+                    SettingsIpcJsonContext.Default.ListFolderWidgetCreateResult) is { } results)
+            {
+                return results;
+            }
+
+            string reason = error ?? "主程序没有回应";
+            App.Log($"[Companion] Create folder widgets refused: {reason}");
+            return folderPaths
+                .Select(path => new FolderWidgetCreateResult(path, false, reason))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Companion] Create folder widgets failed: {ex.Message}");
+            return folderPaths
+                .Select(path => new FolderWidgetCreateResult(path, false, ex.Message))
+                .ToList();
+        }
+    }
+
+    public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
+        RequestLayoutTransferAsync(SettingsIpcMethods.CompanionLayoutPush, libraryFolder);
+
+    public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
+        RequestLayoutTransferAsync(SettingsIpcMethods.CompanionLayoutPull, libraryFolder);
+
+    private async Task<LayoutTransferResult> RequestLayoutTransferAsync(
+        string method,
+        string libraryFolder)
+    {
+        try
+        {
+            (bool ok, string? payload, string? error) = await _client.RequestAsync(
+                method,
+                libraryFolder);
+            if (ok &&
+                SettingsIpcPayload.Decode(payload, SettingsIpcJsonContext.Default.LayoutTransferResult)
+                    is { } result)
+            {
+                return result;
+            }
+
+            return new LayoutTransferResult(false, error ?? "主程序没有回应");
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Companion] {method} failed: {ex.Message}");
+            return new LayoutTransferResult(false, "与主程序通信失败：" + ex.Message);
+        }
+    }
+
     private Task RequestVoidAsync(string method, string? payload = null) =>
         SettingsIpcShell.RequestVoidAsync(_client, method, payload);
 }
