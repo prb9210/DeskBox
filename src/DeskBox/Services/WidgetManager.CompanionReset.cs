@@ -297,21 +297,29 @@ public sealed partial class WidgetManager
             categoryRank[categoryPaths[index]] = index;
         }
 
-        var candidates = new List<WidgetConfig>();
+        // Fold every grid FIRST, then use the SAME candidate predicate as the
+        // shared capsule arrangement. A grid the rail skipped keeps its old
+        // mid-screen Y, and the next arrangement pass anchors the whole bar on
+        // that stale member — exactly how the rail ended up a third of the
+        // screen down while still looking right-aligned.
         foreach (WidgetConfig config in settings.WidgetLayout.Widgets)
         {
-            if (IsDeleted(config.Id) ||
-                config.IsDisabled ||
-                !config.IsVisible ||
-                !WidgetGroupSettings.IsActiveMember(settings, config.Id) ||
-                !_widgetRegistry.IsAvailableForSession(config, settings))
+            if (IsDeleted(config.Id))
             {
                 continue;
             }
 
-            candidates.Add(config);
+            config.IsCollapsed = true;
+            if (WidgetCollapseBehaviorNames.Resolve(config, settings.WidgetShell.WidgetCollapseBehavior) ==
+                WidgetCollapseBehavior.Expanded)
+            {
+                // Per-grid override wins over the global mode; clear it so the
+                // capsule actually folds.
+                WidgetCollapseBehaviorNames.SetOverride(config, WidgetCollapseBehavior.Click);
+            }
         }
 
+        List<WidgetConfig> candidates = GetCapsuleArrangementCandidates(settings).ToList();
         if (candidates.Count == 0)
         {
             return 0;
@@ -359,17 +367,9 @@ public sealed partial class WidgetManager
         var nextYByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
         var columnByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
 
+        var placedBounds = new Dictionary<string, RectInt32>(StringComparer.Ordinal);
         foreach (WidgetConfig config in ordered)
         {
-            config.IsCollapsed = true;
-            if (WidgetCollapseBehaviorNames.Resolve(config, settings.WidgetShell.WidgetCollapseBehavior) ==
-                WidgetCollapseBehavior.Expanded)
-            {
-                // Per-grid override wins over the global mode; clear it so the
-                // capsule actually folds.
-                WidgetCollapseBehaviorNames.SetOverride(config, WidgetCollapseBehavior.Click);
-            }
-
             RectInt32 current = ResolveCompactBounds(config);
             RectInt32 workArea = DisplayArea.GetFromRect(
                 current,
@@ -405,6 +405,7 @@ public sealed partial class WidgetManager
             nextYByWorkArea[workAreaKey] = y + height + spacing;
 
             config.CompactPlacement = CreatePlacement(bounds);
+            placedBounds[config.Id] = bounds;
             SynchronizeGroupLayoutFromMember(config);
 
             if (FindLoadedWindow(config.Id) is { } window)
@@ -420,11 +421,25 @@ public sealed partial class WidgetManager
         settings.WidgetShell.WidgetCapsuleBarOrder.Clear();
         settings.WidgetShell.WidgetCapsuleBarOrder.AddRange(ordered.Select(config => config.Id));
 
+        // Record the rail as already applied instead of re-running the shared
+        // arrangement pass: that pass re-sorts bar members by X then Y (which
+        // reorders differently-sized capsules and re-anchors the bar on the
+        // first, possibly stale, member). With this bookkeeping the rail keeps
+        // its top-right order, and a restart sees mode=Bar and keeps it too.
+        _lastCapsuleBarBounds.Clear();
+        foreach ((string id, RectInt32 bounds) in placedBounds)
+        {
+            _lastCapsuleBarBounds[id] = bounds;
+        }
+
+        _lastEffectiveCapsuleArrangementMode = SettingsService.WidgetCapsuleArrangementBar;
+        _lastCapsuleBarPlacement = SettingsService.WidgetCapsuleBarPlacementRight;
+        _lastCapsuleBarDirection = SettingsService.WidgetCapsuleBarDirectionVertical;
+        _lastCapsuleBarSpacing = spacingLogical;
+        _lastCapsuleArrangementMemberSignature = string.Join('|', candidates.Select(config => config.Id));
+        _lastCapsuleBarGeometrySignature = BuildCapsuleBarGeometrySignature(settings, candidates);
+
         _settingsService.SaveDebounced(notifySubscribers: false);
-        // Let the shared arrangement pass re-derive the bar slots from the
-        // order + first member we just wrote, so a later consistency check
-        // cannot snap the rail back to a stale layout.
-        RefreshCapsuleBarLayout();
         NoteWidgetWindowsMoved();
         return ordered.Count;
     }
