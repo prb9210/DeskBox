@@ -19,13 +19,16 @@ public sealed class WidgetDrawerSettings
 {
     public const string FollowThemeId = "theme";
 
+    /// <summary>默认色：不再跟系统明暗走。浅色 Windows 上会变成蓝、深色上变青，
+    /// 两台机器同样是「最新版」却一蓝一青 —— 用户只会认定版本不一致。</summary>
+    public const string DefaultColorId = "cyan";
+
     /// <summary>Presets ordered as they appear in the menu. Colours are the
     /// Fluent accent family so they harmonise with the app and Windows alike.</summary>
     public static readonly IReadOnlyList<DrawerColorPreset> Presets = new[]
     {
-        new DrawerColorPreset(FollowThemeId, "跟随主题", "#3B82F6", "#1D4ED8", "#93C5FD"),
+        new DrawerColorPreset(FollowThemeId, "默认（青）", "#06B6D4", "#0E7490", "#A5F3FC"),
         new DrawerColorPreset("blue", "蓝", "#3B82F6", "#1D4ED8", "#93C5FD"),
-        new DrawerColorPreset("cyan", "青", "#06B6D4", "#0E7490", "#A5F3FC"),
         new DrawerColorPreset("green", "绿", "#10B981", "#047857", "#A7F3D0"),
         new DrawerColorPreset("purple", "紫", "#8B5CF6", "#6D28D9", "#DDD6FE"),
         new DrawerColorPreset("orange", "橙", "#F97316", "#C2410C", "#FED7AA"),
@@ -103,9 +106,14 @@ public sealed class WidgetDrawerSettings
 
     public static DrawerColorPreset? Find(string id)
     {
+        // 旧版本把青色存成 "cyan"，现在青色就是默认项（id=theme）。
+        string key = string.Equals(id, DefaultColorId, StringComparison.OrdinalIgnoreCase)
+            ? FollowThemeId
+            : id;
+
         foreach (DrawerColorPreset preset in Presets)
         {
-            if (string.Equals(preset.Id, id, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(preset.Id, key, StringComparison.OrdinalIgnoreCase))
             {
                 return preset;
             }

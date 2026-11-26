@@ -40,7 +40,6 @@ public sealed partial class WidgetDrawerWindow : Window
     private const double FanInner = 44;
     private const double FanOuter = 132;
     private const double ExpandedSize = (FanOuter + WindowPadding) * 2; // 292 DIP
-    private const double MinExpandedSize = 190;
     private const double FanGapDegrees = 2.2;
 
     private const int ScreenMargin = 18;
@@ -59,7 +58,11 @@ public sealed partial class WidgetDrawerWindow : Window
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
     private double _scale = 1.0;
-    private bool _clipApplied;
+
+    /// <summary>收起态球心（屏幕像素）。展开时如果为了让整圈扇片可见而把窗口
+    /// 推进了屏幕内，收起就按这个中心放回去，球不会越点越往中间跑。</summary>
+    private PointInt32? _restoreCenterPixels;
+    private bool _sizeEnforcing;
 
     // Recomputed每一次 from the actual client size.
     private double _centerX = ClosedSize / 2;
@@ -100,7 +103,15 @@ public sealed partial class WidgetDrawerWindow : Window
         RootGrid.Loaded += (_, _) =>
         {
             UpdateStateDot();
+
+            // XamlRoot 只有 Loaded 之后才有 RasterizationScale。构造时读到的
+            // 永远是 1.0，于是在 150%/200% 缩放的机器上会按 64 像素建窗，
+            // 实际只有 43 DIP —— 56 DIP 的球比窗口还大，被裁成「缺一块的球」。
+            // 这是「同一版本，宿舍的球不完整」的根因。
+            ApplyScale();
+            EnsureWindowPixels();
             Relayout();
+            ApplyWindowClip();
         };
 
         RootGrid.SizeChanged += (_, _) =>
@@ -189,12 +200,14 @@ public sealed partial class WidgetDrawerWindow : Window
     }
 
     /// <summary>
-    /// 圆不圆只跟「收起状态」有关：收起时把窗口裁成内切圆，球一定是完整的圆。
+    /// 窗口永远裁成圆：收起是内切圆（球 56 &lt; 窗口 64，构造上切不到球），
+    /// 展开是「扇形外径 + 1.5 DIP」的圆。
     ///
-    /// 展开时**一律不裁**。扇形的外径是 (窗口/2 - WindowPadding)，比内切圆还大；
-    /// 只要裁切半径不是从「窗口真实像素」算出来（早前几版用 DIP×_scale 或
-    /// 按屏幕边缘重算直径），圆就会比扇形小或偏心，把扇片切成一条条斜片
-    /// —— 用户看到的「展开后是很奇怪的形状」就是它。
+    /// 早前「展开一律不裁」是为了避免把扇片切成斜条；那条约束来自用
+    /// DIP×_scale 或屏幕边缘距离去算半径。现在半径只由窗口真实像素决定
+    /// （且恒 ≤ min(宽,高)/2），扇形画在窗口正中、直径不超过窗口，
+    /// 所以既不会切到扇片，也不会在背景材质不透明的机器上露出深色方框
+    /// —— 宿舍那台的「方形底板 + 扇片被切」就是这两件事。
     /// </summary>
     private void ApplyWindowClip()
     {
@@ -206,39 +219,32 @@ public sealed partial class WidgetDrawerWindow : Window
                 return;
             }
 
-            if (_expanded)
-            {
-                // 展开：撤销区域裁切，窗口整块可见。圆不圆由扇片自己的几何决定，
-                // 背景透明由 TransparentTintBackdrop 负责。
-                if (_clipApplied)
-                {
-                    Win32Helper.SetWindowRgn(hWnd, IntPtr.Zero, true);
-                    _clipApplied = false;
-                    App.Log("[Drawer] clip cleared (expanded)");
-                }
-
-                return;
-            }
-
-            // 收起：内切圆 = 圆心在窗口正中央、半径 min(宽,高)/2。
-            // 球只有 56 DIP、窗口 64 DIP，内切圆必然比球大，所以无论缩放值、
-            // 尺寸生效时序如何，都切不到球 —— 这条约束是构造性的，不靠调参。
             SizeInt32 size = GetAppWindow().Size;
             int w = size.Width;
             int h = size.Height;
-            int radius = Math.Min(w, h) / 2;
-            if (radius < 8)
+            int inscribed = Math.Min(w, h) / 2;
+            if (inscribed < 8)
             {
                 App.Log($"[Drawer] clip skipped: win={w}x{h}");
                 return;
+            }
+
+            int radius = inscribed;
+            if (_expanded)
+            {
+                double fanScale = Math.Clamp(_layoutDiameterDip / ExpandedSize, 0.4, 1.0);
+                int fanRadius = (int)Math.Round(((FanOuter * fanScale) + 1.5) * _scale);
+                if (fanRadius > 0)
+                {
+                    radius = Math.Min(inscribed, fanRadius);
+                }
             }
 
             int cx = w / 2;
             int cy = h / 2;
             IntPtr region = Win32Helper.CreateEllipticRgn(cx - radius, cy - radius, cx + radius, cy + radius);
             bool ok = Win32Helper.SetWindowRgn(hWnd, region, true) != 0;
-            _clipApplied = ok;
-            App.Log($"[Drawer] clip d={radius * 2} win={w}x{h} scale={_scale:0.##} ok={ok}");
+            App.Log($"[Drawer] clip d={radius * 2} win={w}x{h} expanded={_expanded} scale={_scale:0.##} ok={ok}");
         }
         catch (Exception ex)
         {
@@ -260,6 +266,61 @@ public sealed partial class WidgetDrawerWindow : Window
         if (_scale <= 0)
         {
             _scale = 1.0;
+        }
+    }
+
+    /// <summary>窗口像素尺寸必须等于 DIP × 缩放。构造期拿不到真实缩放时按 1.0 建窗，
+    /// 桌面缩放到 150% 的机器上球就会比窗口大。这里以「真实像素 / 实际 DIP」反推
+    /// 缩放并纠正一次尺寸，窗口中心不动。</summary>
+    private void EnsureWindowPixels()
+    {
+        if (_sizeEnforcing)
+        {
+            return;
+        }
+
+        try
+        {
+            AppWindow appWindow = GetAppWindow();
+            SizeInt32 size = appWindow.Size;
+            double dipWidth = RootGrid.ActualWidth;
+            if (dipWidth > 4)
+            {
+                double derived = size.Width / dipWidth;
+                if (derived > 0.5 && derived < 4 && Math.Abs(derived - _scale) > 0.05)
+                {
+                    App.Log($"[Drawer] scale corrected {_scale:0.###} -> {derived:0.###}");
+                    _scale = derived;
+                }
+            }
+
+            double dip = _expanded ? _layoutDiameterDip : ClosedSize;
+            int want = (int)Math.Round(dip * _scale);
+            if (want < 8 || (size.Width == want && size.Height == want))
+            {
+                return;
+            }
+
+            _sizeEnforcing = true;
+            PointInt32 position = appWindow.Position;
+            int centerX = position.X + (size.Width / 2);
+            int centerY = position.Y + (size.Height / 2);
+
+            RectInt32 work = WorkArea(appWindow);
+            int x = Clamp(centerX - (want / 2), work.X, Math.Max(work.X, work.X + work.Width - want));
+            int y = Clamp(centerY - (want / 2), work.Y, Math.Max(work.Y, work.Y + work.Height - want));
+
+            appWindow.Resize(new SizeInt32(want, want));
+            appWindow.Move(new PointInt32(x, y));
+            App.Log($"[Drawer] size corrected {size.Width}x{size.Height} -> {want}px (dip={dip:0.#} scale={_scale:0.###})");
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] size correction failed: {ex.Message}");
+        }
+        finally
+        {
+            _sizeEnforcing = false;
         }
     }
 
@@ -303,35 +364,55 @@ public sealed partial class WidgetDrawerWindow : Window
         return new SizeInt32(pixels, pixels);
     }
 
-    /// <summary>展开窗口的直径（DIP）：默认就是固定的 ExpandedSize，只有球
-    /// 贴着屏幕边缘、装不下时才整体缩小（扇形同步等比缩放，形状不变）。</summary>
-    private double AvailableExpandedDip()
+    /// <summary>展开窗口的几何：扇形几何是常量（292 DIP），窗口永远按这个尺寸
+    /// 摆放；屏幕装不下时把窗口（连同球）往工作区里推，而不是把扇片缩小。
+    /// 缩小会让整块 ScaleTransform 把 12 DIP 的文字压到 7 DIP，看不清
+    /// —— 这正是「宿舍那边展开后扇片名字被截、两边样式不一样」的来源。</summary>
+    private readonly record struct ExpandedPlan(double DiameterDip, int SizePixels, int OriginX, int OriginY);
+
+    private RectInt32 WorkArea(AppWindow appWindow) =>
+        DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+
+    private ExpandedPlan PlanExpandedWindow(AppWindow appWindow, PointInt32 ballCenter)
     {
-        try
+        RectInt32 work = WorkArea(appWindow);
+        int margin = (int)Math.Round(ScreenMargin * _scale);
+
+        // 尺寸只跟屏幕本身有关，与球的位置无关：正常显示器永远 292 DIP，
+        // 两台机器上看到的环一模一样；只有工作区小于整圈时才按屏缩。
+        double workDip = Math.Min(work.Width / _scale, work.Height / _scale);
+        double dip = Math.Max(160, Math.Min(ExpandedSize, workDip - (ScreenMargin * 2)));
+
+        int sizePixels = Math.Max(8, (int)Math.Round(dip * _scale));
+        int x = ballCenter.X - (sizePixels / 2);
+        int y = ballCenter.Y - (sizePixels / 2);
+
+        // 装不下就整体推进工作区：球跟着挪，但整圈扇片一定完整可见。
+        int maxX = work.X + work.Width - sizePixels;
+        int maxY = work.Y + work.Height - sizePixels;
+        if (maxX > work.X)
         {
-            AppWindow appWindow = GetAppWindow();
-            PointInt32 position = appWindow.Position;
-            SizeInt32 size = appWindow.Size;
-
-            // 用窗口真实中心当球心：收起/展开都成立，不依赖 ClosedSize 与 _scale。
-            int ballCenterX = position.X + (size.Width / 2);
-            int ballCenterY = position.Y + (size.Height / 2);
-
-            RectInt32 work = DisplayArea
-                .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
-                .WorkArea;
-
-            double nearest = Math.Min(
-                Math.Min(ballCenterX - work.X, work.X + work.Width - ballCenterX),
-                Math.Min(ballCenterY - work.Y, work.Y + work.Height - ballCenterY));
-
-            double available = ((nearest / _scale) * 2) - 8;
-            return Math.Clamp(available, MinExpandedSize, ExpandedSize);
+            x = Clamp(x, work.X, maxX);
         }
-        catch (Exception)
+
+        if (maxY > work.Y)
         {
-            return ExpandedSize;
+            y = Clamp(y, work.Y, maxY);
         }
+
+        int minX = work.X + margin;
+        int minY = work.Y + margin;
+        if (maxX - margin > minX)
+        {
+            x = Clamp(x, minX, maxX - margin);
+        }
+
+        if (maxY - margin > minY)
+        {
+            y = Clamp(y, minY, maxY - margin);
+        }
+
+        return new ExpandedPlan(dip, sizePixels, x, y);
     }
 
     public void ShowAtSavedSpot()
@@ -389,20 +470,45 @@ public sealed partial class WidgetDrawerWindow : Window
 
         AppWindow appWindow = GetAppWindow();
         PointInt32 center = BallCenterPixels(appWindow);
-        int ballCenterX = center.X;
-        int ballCenterY = center.Y;
 
         _expanded = expanded;
-        double diameter = expanded ? AvailableExpandedDip() : ClosedSize;
+
+        double diameter;
+        int originX;
+        int originY;
+
+        if (expanded)
+        {
+            // 记住收起时的球心，收起时按它放回去。
+            _restoreCenterPixels = center;
+            ExpandedPlan plan = PlanExpandedWindow(appWindow, center);
+            diameter = plan.DiameterDip;
+            originX = plan.OriginX;
+            originY = plan.OriginY;
+        }
+        else
+        {
+            diameter = ClosedSize;
+            int closedPixels = Math.Max(8, (int)Math.Round(diameter * _scale));
+            PointInt32 back = _restoreCenterPixels ?? center;
+            _restoreCenterPixels = null;
+
+            // 收起回到原来的球心（展开时可能为了完整显示被推进过屏幕内）。
+            RectInt32 work = WorkArea(appWindow);
+            int maxX = work.X + work.Width - closedPixels;
+            int maxY = work.Y + work.Height - closedPixels;
+            originX = back.X - (closedPixels / 2);
+            originY = back.Y - (closedPixels / 2);
+            originX = Clamp(originX, work.X, Math.Max(work.X, maxX));
+            originY = Clamp(originY, work.Y, Math.Max(work.Y, maxY));
+        }
+
         _layoutDiameterDip = diameter;
 
-        // The window grows around the ball centre, so the bead never moves on
-        // screen; the ring is then built from the size the window really got.
-        int half = (int)Math.Round((diameter / 2) * _scale);
         try
         {
             appWindow.Resize(WindowSizePixels(diameter));
-            appWindow.Move(new PointInt32(ballCenterX - half, ballCenterY - half));
+            appWindow.Move(new PointInt32(originX, originY));
         }
         catch (Exception ex)
         {
@@ -448,17 +554,10 @@ public sealed partial class WidgetDrawerWindow : Window
         Ball.StrokeThickness = 1.4;
     }
 
-    private DrawerColorPreset ResolvePreset()
-    {
-        DrawerColorPreset preset = _settings.ResolveColor();
-        if (preset.Id != WidgetDrawerSettings.FollowThemeId)
-        {
-            return preset;
-        }
-
-        bool light = Application.Current.RequestedTheme == ApplicationTheme.Light;
-        return WidgetDrawerSettings.Find(light ? "blue" : "cyan") ?? WidgetDrawerSettings.Presets[0];
-    }
+    /// <summary>颜色不再跟随系统明暗：Windows 浅色主题会解析成蓝色、深色主题解析成
+    /// 青色，于是两台机器明明都是最新版却一蓝一青，用户只会认为版本不一致。
+    /// 现在默认一律青（用户手选过的预设照旧生效）。</summary>
+    private DrawerColorPreset ResolvePreset() => _settings.ResolveColor();
 
     private static Color ParseColor(string hex)
     {
@@ -896,6 +995,9 @@ public sealed partial class WidgetDrawerWindow : Window
             }
 
             appWindow.Move(new PointInt32(x, y));
+
+            // 用户自己拖过球：展开时的“临时推进”作废，收起就落在拖到的地方。
+            _restoreCenterPixels = null;
 
             // Persist the position of the *collapsed* window: a drag can happen
             // while the ring is open, and saving that bigger window's origin
