@@ -376,6 +376,14 @@ public sealed partial class WidgetManager
         // 宽度差一档时右对齐就变成「左边缘参差 + 看着压住下一格」。这里取同一显示器上
         // 最宽的那个当公共宽度（只增不减，谁也不裁内容），并写回 CompactWidth，
         // 否则下次共用排版又按各自内容宽度算回去。
+        // 一列格子必须同宽。对齐模式下列宽就是每个格子的 Width，先统一再解析：
+        // 否则刚打开的功能格子（音乐/待办/天气…）带着自己的默认宽度进列，
+        // 右对齐后左边缘参差，看起来像长短不一。
+        if (alignToExpandedWidth)
+        {
+            WidgetColumnWidthPolicy.ApplyAligned(ordered);
+        }
+
         var railLogicalWidthByWorkArea = new Dictionary<string, double>(StringComparer.Ordinal);
         var resolvedByConfig = new Dictionary<string, (RectInt32 Bounds, string WorkAreaKey, double Scale)>(
             StringComparer.Ordinal);

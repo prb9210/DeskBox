@@ -149,6 +149,15 @@ public sealed partial class WidgetManager
             .Select(config => new ColumnMember(config, IsExpandedSlot: false))
             .Concat(expandedMembers.Select(config => new ColumnMember(config, IsExpandedSlot: true)))
             .ToList();
+        // 整列同宽：把用户设定的列宽写回每个成员。打开一个新功能格子（音乐/待办…）
+        // 时它带着自己的默认展开宽度进列，若不写回，右对齐后就是「有的长有的短」。
+        bool columnWidthChanged =
+            string.Equals(mode, SettingsService.WidgetCapsuleArrangementBar, StringComparison.Ordinal) &&
+            SettingsService.NormalizeWidgetCompactWidthMode(
+                settings.WidgetShell.WidgetCompactWidthMode) ==
+            SettingsService.WidgetCompactWidthModeAligned &&
+            WidgetColumnWidthPolicy.ApplyAligned(
+                columnMembers.Select(member => member.Config).ToList());
         string memberSignature = string.Join('|', columnMembers.Select(member =>
             member.IsExpandedSlot ? $"{member.Config.Id}*" : member.Config.Id));
         string geometrySignature = BuildCapsuleBarGeometrySignature(settings, columnMembers);
@@ -183,6 +192,7 @@ public sealed partial class WidgetManager
         try
         {
             bool changed = CleanupCapsuleArrangementState(settings);
+            changed |= columnWidthChanged;
             if (mode == SettingsService.WidgetCapsuleArrangementFree)
             {
                 _lastCapsuleBarBounds.Clear();
