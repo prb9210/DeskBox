@@ -367,20 +367,74 @@ public sealed partial class WidgetManager
         var nextYByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
         var columnByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
 
+        bool alignToExpandedWidth =
+            SettingsService.NormalizeWidgetCompactWidthMode(
+                settings.WidgetShell.WidgetCompactWidthMode) ==
+            SettingsService.WidgetCompactWidthModeAligned;
+
+        // 一列胶囊必须同宽。功能格子（待办/天气）和分类格子各按内容算 compact 宽度，
+        // 宽度差一档时右对齐就变成「左边缘参差 + 看着压住下一格」。这里取同一显示器上
+        // 最宽的那个当公共宽度（只增不减，谁也不裁内容），并写回 CompactWidth，
+        // 否则下次共用排版又按各自内容宽度算回去。
+        var railLogicalWidthByWorkArea = new Dictionary<string, double>(StringComparer.Ordinal);
+        var resolvedByConfig = new Dictionary<string, (RectInt32 Bounds, string WorkAreaKey, double Scale)>(
+            StringComparer.Ordinal);
+        foreach (WidgetConfig config in ordered)
+        {
+            RectInt32 resolved = ResolveCompactBounds(config);
+            RectInt32 area = DisplayArea.GetFromRect(
+                resolved,
+                DisplayAreaFallback.Nearest).WorkArea;
+            string areaKey = $"{area.X}:{area.Y}:{area.Width}:{area.Height}";
+            double areaScale = Math.Max(0.01, WidgetPositioningService.GetDpiScale(area));
+            resolvedByConfig[config.Id] = (resolved, areaKey, areaScale);
+
+            if (alignToExpandedWidth)
+            {
+                continue;
+            }
+
+            double logical = resolved.Width / areaScale;
+            if (!railLogicalWidthByWorkArea.TryGetValue(areaKey, out double existing) ||
+                logical > existing)
+            {
+                railLogicalWidthByWorkArea[areaKey] = logical;
+            }
+        }
+
         var placedBounds = new Dictionary<string, RectInt32>(StringComparer.Ordinal);
         foreach (WidgetConfig config in ordered)
         {
-            RectInt32 current = ResolveCompactBounds(config);
+            if (!resolvedByConfig.TryGetValue(config.Id, out var resolvedSize))
+            {
+                continue;
+            }
+
+            RectInt32 current = resolvedSize.Bounds;
+            string workAreaKey = resolvedSize.WorkAreaKey;
+            double scale = resolvedSize.Scale;
             RectInt32 workArea = DisplayArea.GetFromRect(
                 current,
                 DisplayAreaFallback.Nearest).WorkArea;
-            string workAreaKey = $"{workArea.X}:{workArea.Y}:{workArea.Width}:{workArea.Height}";
-            double scale = WidgetPositioningService.GetDpiScale(workArea);
             int margin = Math.Max(0, (int)Math.Round(CompanionRailEdgeMargin * scale));
             int spacing = Math.Max(0, (int)Math.Round(spacingLogical * scale));
             int maxWidth = Math.Max(1, workArea.Width - (margin * 2));
             int width = Math.Min(Math.Max(1, current.Width), maxWidth);
             int height = Math.Max(1, current.Height);
+
+            if (railLogicalWidthByWorkArea.TryGetValue(workAreaKey, out double railLogical) &&
+                railLogical > 0)
+            {
+                width = Math.Min(
+                    Math.Max(1, (int)Math.Round(railLogical * scale)),
+                    maxWidth);
+                if (!alignToExpandedWidth)
+                {
+                    // 自适应宽度模式下把公共宽度落到成员上，否则下次排版又按内容算回去。
+                    // 对齐模式（默认）忽略 CompactWidth，宽度由共用排版统一取最大值。
+                    config.CompactWidth = Math.Round(railLogical, 2);
+                }
+            }
 
             int bottom = workArea.Y + workArea.Height - margin;
             int column = columnByWorkArea.TryGetValue(workAreaKey, out int currentColumn)

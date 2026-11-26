@@ -28,7 +28,11 @@ public sealed partial class WeatherWidgetViewModel
         {
             _latitude = forecast.Latitude;
             _longitude = forecast.Longitude;
-            _locationName = forecast.LocationName;
+            // 缓存里那份旧兜底名（"北京"）不能再盖到数据自己带的城市名上：
+            // 国内源返回的是「高州市」，盖掉就成了「北京 21°C」的错位。
+            _locationName = string.IsNullOrWhiteSpace(forecast.Data.LocationName)
+                ? forecast.LocationName
+                : forecast.Data.LocationName;
             _locationInitialized = true;
             _locationResolvedAtUtc = state.LastLocation?.IsValid == true &&
                 WeatherCacheStore.IsSameLocation(
@@ -41,7 +45,10 @@ public sealed partial class WeatherWidgetViewModel
 
             TimeSpan refreshInterval = GetConfiguredRefreshInterval();
             bool isStale = DateTimeOffset.UtcNow - forecast.FetchedAtUtc >= refreshInterval;
-            forecast.Data.LocationName = forecast.LocationName;
+            if (string.IsNullOrWhiteSpace(forecast.Data.LocationName))
+            {
+                forecast.Data.LocationName = forecast.LocationName;
+            }
             forecast.Data.IsStale = isStale;
             forecast.Data.IsFallback = !string.Equals(
                 forecast.RequestedSource,
@@ -126,9 +133,9 @@ public sealed partial class WeatherWidgetViewModel
             }
             else
             {
-                _latitude = 39.9042;
-                _longitude = 116.4074;
-                _locationName = _localizationService.T("Weather.LocationFallbackCity");
+                _latitude = WeatherService.DefaultChinaCityLatitude;
+                _longitude = WeatherService.DefaultChinaCityLongitude;
+                _locationName = WeatherService.DefaultChinaCityName;
                 _locationInitialized = true;
                 _locationRetryNotBeforeUtc = now + WeatherRefreshBackoffPolicy.LocationFailureDelay;
                 IsUsingFallbackLocation = true;
@@ -198,9 +205,9 @@ public sealed partial class WeatherWidgetViewModel
             }
     
             // Last resort: use a neutral default so the widget renders something.
-            _latitude = 39.9042;
-            _longitude = 116.4074;
-            _locationName = _localizationService.T("Weather.LocationFallbackCity");
+            _latitude = WeatherService.DefaultChinaCityLatitude;
+            _longitude = WeatherService.DefaultChinaCityLongitude;
+            _locationName = WeatherService.DefaultChinaCityName;
             _locationInitialized = true;
             IsUsingFallbackLocation = true;
         }
@@ -239,9 +246,9 @@ public sealed partial class WeatherWidgetViewModel
 
                 if (!_locationInitialized)
                 {
-                    _latitude = 39.9042;
-                    _longitude = 116.4074;
-                    _locationName = _localizationService.T("Weather.LocationFallbackCity");
+                    _latitude = WeatherService.DefaultChinaCityLatitude;
+                    _longitude = WeatherService.DefaultChinaCityLongitude;
+                    _locationName = WeatherService.DefaultChinaCityName;
                     _locationInitialized = true;
                     IsUsingFallbackLocation = true;
                 }

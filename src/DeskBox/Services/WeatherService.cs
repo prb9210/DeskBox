@@ -26,6 +26,13 @@ public sealed class WeatherService : IDisposable
     private const string ChinaWeatherUrl = "http://t.weather.itboy.net/api/weather/city/";
     private const string DefaultChinaCityCode = "101282002";
 
+    // 内网里定位接口（Windows 定位 + ip-api / ipapi.co）一律连不上时的兜底城市。
+    // 必须与国内源的城市码指向同一座城市：早先兜底写死北京坐标 + "北京"，
+    // 于是出现「标签北京、数值却是高州」的错位（国内源按城市码取数，不看经纬度）。
+    internal const string DefaultChinaCityName = "高州市";
+    internal const double DefaultChinaCityLatitude = 21.9185;
+    internal const double DefaultChinaCityLongitude = 110.8515;
+
     // ── MSN Weather constants ──
     private const string MsnWeatherUrl = "https://api.msn.com/weather/overview";
     private const string MsnApiKey = "UhJ4G66OjyLbn9mXARgajXLiLw6V75sHnfpU60aJBB";
@@ -155,7 +162,9 @@ public sealed class WeatherService : IDisposable
             string.Equals(_cacheSourceKey, sourceKey, StringComparison.Ordinal) &&
             DateTimeOffset.UtcNow - _cacheTimestamp < effectiveCacheDuration)
         {
-            _cachedData.LocationName = locationName;
+            _cachedData.LocationName = string.IsNullOrWhiteSpace(_cachedData.LocationName)
+                ? locationName
+                : _cachedData.LocationName;
             return _cachedData;
         }
 
@@ -221,7 +230,11 @@ public sealed class WeatherService : IDisposable
             {
                 Latitude = latitude,
                 Longitude = longitude,
-                LocationName = locationName,
+                // 存数据自己带的城市名（国内源 → "高州市"）。存调用方那份
+                // 兜底名（"北京"）会让下次启动把高州的数值贴上北京的标签。
+                LocationName = string.IsNullOrWhiteSpace(data.LocationName)
+                    ? locationName
+                    : data.LocationName,
                 RequestedSource = sourceKey,
                 ActualSource = actualSource,
                 FetchedAtUtc = _cacheTimestamp,
