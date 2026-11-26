@@ -319,7 +319,9 @@ public sealed partial class WidgetManager
             }
         }
 
-        List<WidgetConfig> candidates = GetColumnCandidates(settings).Capsules.ToList();
+        (IReadOnlyList<WidgetConfig> capsuleCandidates, IReadOnlyList<WidgetConfig> expandedMembers) =
+            GetColumnCandidates(settings);
+        List<WidgetConfig> candidates = capsuleCandidates.ToList();
         if (candidates.Count == 0)
         {
             return 0;
@@ -372,16 +374,13 @@ public sealed partial class WidgetManager
                 settings.WidgetShell.WidgetCompactWidthMode) ==
             SettingsService.WidgetCompactWidthModeAligned;
 
-        // 一列胶囊必须同宽。功能格子（待办/天气）和分类格子各按内容算 compact 宽度，
-        // 宽度差一档时右对齐就变成「左边缘参差 + 看着压住下一格」。这里取同一显示器上
-        // 最宽的那个当公共宽度（只增不减，谁也不裁内容），并写回 CompactWidth，
-        // 否则下次共用排版又按各自内容宽度算回去。
         // 一列格子必须同宽。对齐模式下列宽就是每个格子的 Width，先统一再解析：
         // 否则刚打开的功能格子（音乐/待办/天气…）带着自己的默认宽度进列，
-        // 右对齐后左边缘参差，看起来像长短不一。
+        // 右对齐后左边缘参差，看起来像长短不一。常开（展开）的成员这轮不参与
+        // 摆位，但它们的宽度也要一起统一，否则整列仍是一长一短。
         if (alignToExpandedWidth)
         {
-            WidgetColumnWidthPolicy.ApplyAligned(ordered);
+            WidgetColumnWidthPolicy.ApplyAligned(ordered.Concat(expandedMembers).ToList());
         }
 
         var railLogicalWidthByWorkArea = new Dictionary<string, double>(StringComparer.Ordinal);
