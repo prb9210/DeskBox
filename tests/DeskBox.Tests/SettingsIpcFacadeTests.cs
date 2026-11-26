@@ -932,6 +932,22 @@ public sealed class SettingsIpcFacadeTests : IDisposable
 
             DesktopOrganizationUndoResult abandon = await remote.AbandonDesktopOrganizationUndoAsync("h1");
             Assert.Equal(DesktopOrganizationUndoOutcome.Completed, abandon.Outcome);
+
+            // Companion (桌面管家): these three MUST ride the pipe — the
+            // settings host owns no widget manager, so a host-local call is
+            // the "格子服务 20 秒内没起来" regression.
+            IReadOnlyList<FolderWidgetCreateResult> createdFolders =
+                await remote.CreateFolderWidgetsAsync(["C:\\lib\\01 数学教学", "C:\\lib\\02 教务考务"]);
+            Assert.Equal(2, createdFolders.Count);
+            Assert.All(createdFolders, result => Assert.True(result.Created));
+            Assert.Equal("C:\\lib\\01 数学教学", createdFolders[0].FolderPath);
+
+            LayoutTransferResult pushed = await remote.PushLayoutAsync("C:\\lib");
+            Assert.True(pushed.Ok);
+            Assert.Equal("pushed", pushed.Message);
+            LayoutTransferResult pulled = await remote.PullLayoutAsync("C:\\lib");
+            Assert.True(pulled.Ok);
+            Assert.Equal("pulled", pulled.Message);
         }
         finally
         {
