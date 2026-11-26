@@ -39,7 +39,7 @@ public sealed partial class WidgetManager
 
         string managedRoot = string.Empty;
         string configuredManagedRoot = SettingsService.NormalizeManagedStorageRootPath(
-            _settingsService.Settings.DefaultManagedStorageRootPath);
+            _settingsService.Settings.FileWidget.DefaultManagedStorageRootPath);
         if (!string.IsNullOrWhiteSpace(configuredManagedRoot))
         {
             managedRoot = NormalizeCompanionPath(configuredManagedRoot);
@@ -90,7 +90,7 @@ public sealed partial class WidgetManager
         // MappedFolderPath) owns no category folder and is left alone.
         var keepByPath = new Dictionary<string, WidgetConfig>(StringComparer.OrdinalIgnoreCase);
         var redundant = new List<(WidgetConfig Widget, string? Folder)>();
-        foreach (WidgetConfig widget in _settingsService.Settings.Widgets
+        foreach (WidgetConfig widget in _settingsService.Settings.WidgetLayout.Widgets
                      .Where(candidate => candidate.WidgetKind == WidgetKind.File && !IsDeleted(candidate.Id))
                      .ToList())
         {
@@ -244,7 +244,7 @@ public sealed partial class WidgetManager
 
     private WidgetConfig? FindFolderWidget(string folderPath)
     {
-        foreach (WidgetConfig widget in _settingsService.Settings.Widgets)
+        foreach (WidgetConfig widget in _settingsService.Settings.WidgetLayout.Widgets)
         {
             if (widget.WidgetKind != WidgetKind.File ||
                 IsDeleted(widget.Id) ||
@@ -285,10 +285,10 @@ public sealed partial class WidgetManager
         // A capsule can only exist when the collapse behavior is not "always
         // expanded"; the user asked for folded grids, so downgrade the global
         // mode once instead of leaving every grid expanded.
-        if (WidgetCollapseBehaviorNames.Normalize(settings.WidgetCollapseBehavior) ==
+        if (WidgetCollapseBehaviorNames.Normalize(settings.WidgetShell.WidgetCollapseBehavior) ==
             WidgetCollapseBehavior.Expanded)
         {
-            settings.WidgetCollapseBehavior = WidgetCollapseBehaviorNames.Click;
+            settings.WidgetShell.WidgetCollapseBehavior = WidgetCollapseBehaviorNames.Click;
         }
 
         var categoryRank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -298,7 +298,7 @@ public sealed partial class WidgetManager
         }
 
         var candidates = new List<WidgetConfig>();
-        foreach (WidgetConfig config in settings.Widgets)
+        foreach (WidgetConfig config in settings.WidgetLayout.Widgets)
         {
             if (IsDeleted(config.Id) ||
                 config.IsDisabled ||
@@ -355,14 +355,14 @@ public sealed partial class WidgetManager
             .ToList();
 
         double spacingLogical = SettingsService.NormalizeWidgetCapsuleBarSpacing(
-            settings.WidgetCapsuleBarSpacing);
+            settings.WidgetShell.WidgetCapsuleBarSpacing);
         var nextYByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
         var columnByWorkArea = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (WidgetConfig config in ordered)
         {
             config.IsCollapsed = true;
-            if (WidgetCollapseBehaviorNames.Resolve(config, settings.WidgetCollapseBehavior) ==
+            if (WidgetCollapseBehaviorNames.Resolve(config, settings.WidgetShell.WidgetCollapseBehavior) ==
                 WidgetCollapseBehavior.Expanded)
             {
                 // Per-grid override wins over the global mode; clear it so the
@@ -414,11 +414,11 @@ public sealed partial class WidgetManager
             }
         }
 
-        settings.WidgetCapsuleArrangementMode = SettingsService.WidgetCapsuleArrangementBar;
-        settings.WidgetCapsuleBarPlacement = SettingsService.WidgetCapsuleBarPlacementRight;
-        settings.WidgetCapsuleBarDirection = SettingsService.WidgetCapsuleBarDirectionVertical;
-        settings.WidgetCapsuleBarOrder.Clear();
-        settings.WidgetCapsuleBarOrder.AddRange(ordered.Select(config => config.Id));
+        settings.WidgetShell.WidgetCapsuleArrangementMode = SettingsService.WidgetCapsuleArrangementBar;
+        settings.WidgetShell.WidgetCapsuleBarPlacement = SettingsService.WidgetCapsuleBarPlacementRight;
+        settings.WidgetShell.WidgetCapsuleBarDirection = SettingsService.WidgetCapsuleBarDirectionVertical;
+        settings.WidgetShell.WidgetCapsuleBarOrder.Clear();
+        settings.WidgetShell.WidgetCapsuleBarOrder.AddRange(ordered.Select(config => config.Id));
 
         _settingsService.SaveDebounced(notifySubscribers: false);
         // Let the shared arrangement pass re-derive the bar slots from the
