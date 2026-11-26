@@ -299,6 +299,13 @@ public sealed partial class WidgetManager
             SettingsService.NormalizeWidgetCapsuleBarSpacing(settings.WidgetCapsuleBarSpacing) *
             WidgetPositioningService.GetDpiScale(workArea)));
 
+        // 分类文件夹格子（01…08）必须连在一起：拖动时其它格子不能插进它们中间。
+        HashSet<string> stickyGroupIds = settings.Widgets
+            .Where(config => memberBounds.ContainsKey(config.Id) &&
+                config.WidgetKind == WidgetKind.File)
+            .Select(config => config.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
         _capsuleBarDragSession = new CapsuleBarDragSession(
             widgetId,
             activeBounds,
@@ -309,7 +316,8 @@ public sealed partial class WidgetManager
             direction,
             anchorPoint,
             anchor,
-            spacing);
+            spacing,
+            stickyGroupIds);
         return true;
     }
 
@@ -400,12 +408,13 @@ public sealed partial class WidgetManager
             ReanchorCapsuleBarToWorkArea(session, workArea, placement, proposedActiveBounds);
         }
 
-        IReadOnlyList<string> reordered = WidgetCapsuleOrderCalculator.MoveToNearestSlot(
+        IReadOnlyList<string> reordered = WidgetCapsuleOrderCalculator.MoveToPointer(
             session.MemberOrder,
             session.MemberSlots,
             session.ActiveWidgetId,
             proposedActiveBounds,
-            session.Direction);
+            session.Direction,
+            session.StickyGroupIds);
         if (!session.MemberOrder.SequenceEqual(reordered, StringComparer.Ordinal))
         {
             session.MemberOrder = reordered.ToList();
@@ -442,6 +451,14 @@ public sealed partial class WidgetManager
                     window.PreviewCompactArrangement(target);
                 }
             }
+
+            // 重排后的真实槽位要立刻回写进会话：下一帧的「指针越过几个中心」
+            // 必须基于最新几何，否则格子高度不等时会来回跳。
+            session.MemberSlots = session.MemberOrder
+                .Select(id => arranged.TryGetValue(id, out RectInt32 slot)
+                    ? slot
+                    : session.MemberStartBounds[id])
+                .ToArray();
 
             NoteWidgetWindowsMoved();
         }
@@ -497,6 +514,83 @@ public sealed partial class WidgetManager
 
         NoteWidgetWindowsMoved();
         _settingsService.SaveDebounced(notifySubscribers: false);
+        // 落手后强制排一趟：拖动期间的中途位置不算数，最终布局一律由排布
+        // 计算器给出，否则两个格子可能停在同一个槽位（互相遮挡）。
+        ApplyCapsuleArrangementIfChanged(force: true);
+    }
+
+    /// <summary>
+    /// 展开状态的功能格子被拖到新位置：按落点决定它在右侧列里的新次序，然后
+    /// 由排布收口（吸附回列内）。否则它会停在落点、压住下面的格子，而且顺序
+    /// 永远调不动（用户报过「上下位置不能任意调整、还会重叠」）。
+    /// </summary>
+    internal bool TryReorderBarMemberFromDrop(WidgetConfig config, RectInt32 hostBounds)
+    {
+        if (ResolveEffectiveCapsuleArrangementMode() != SettingsService.WidgetCapsuleArrangementBar ||
+            !_lastCapsuleBarBounds.TryGetValue(config.Id, out RectInt32 currentBounds))
+        {
+            return false;
+        }
+
+        AppSettings settings = _settingsService.Settings;
+        string workAreaKey = FormatWorkAreaKey(DisplayArea.GetFromRect(
+            currentBounds,
+            DisplayAreaFallback.Nearest).WorkArea);
+        var memberBounds = _lastCapsuleBarBounds
+            .Where(entry => FormatWorkAreaKey(DisplayArea.GetFromRect(
+                entry.Value,
+                DisplayAreaFallback.Nearest).WorkArea) == workAreaKey)
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+        if (!memberBounds.ContainsKey(config.Id))
+        {
+            return false;
+        }
+
+        var memberOrder = settings.WidgetCapsuleBarOrder
+            .Where(memberBounds.ContainsKey)
+            .ToList();
+        foreach (string id in memberBounds.Keys)
+        {
+            if (!memberOrder.Contains(id, StringComparer.Ordinal))
+            {
+                memberOrder.Add(id);
+            }
+        }
+
+        string placement = SettingsService.NormalizeWidgetCapsuleBarPlacement(
+            settings.WidgetCapsuleBarPlacement);
+        RectInt32 workArea = DisplayArea.GetFromRect(
+            currentBounds,
+            DisplayAreaFallback.Nearest).WorkArea;
+        string direction = ResolveBarDirection(
+            settings.WidgetCapsuleBarDirection,
+            placement,
+            workArea);
+        HashSet<string> stickyGroupIds = settings.Widgets
+            .Where(candidate => memberBounds.ContainsKey(candidate.Id) &&
+                candidate.WidgetKind == WidgetKind.File)
+            .Select(candidate => candidate.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        IReadOnlyList<string> reordered = WidgetCapsuleOrderCalculator.MoveToPointer(
+            memberOrder,
+            memberOrder.Select(id => memberBounds[id]).ToArray(),
+            config.Id,
+            hostBounds,
+            direction,
+            stickyGroupIds);
+        if (!memberOrder.SequenceEqual(reordered, StringComparer.Ordinal))
+        {
+            IReadOnlyList<string> merged = WidgetCapsuleOrderCalculator.MergeGroupOrder(
+                settings.WidgetCapsuleBarOrder,
+                reordered);
+            settings.WidgetCapsuleBarOrder.Clear();
+            settings.WidgetCapsuleBarOrder.AddRange(merged);
+        }
+
+        // 不管顺序变没变，落手后都让排布收口一次：展开卡片停在落点上就是重叠。
+        ApplyCapsuleArrangementIfChanged(force: true);
+        return true;
     }
 
     internal bool MoveCapsuleBarFromExpandedWidget(
@@ -771,6 +865,24 @@ public sealed partial class WidgetManager
                 }
 
                 barOrder.Insert(orderIndex, id);
+                changed = true;
+            }
+        }
+
+        // 分类文件夹 01…08 必须连成一段：历史上它们可能被功能格子隔开，
+        // 每趟排布都收一次，保证不论怎么拖、怎么增删，列里都是一整块。
+        HashSet<string> stickyGroupIds = members
+            .Where(member => member.Config.WidgetKind == WidgetKind.File)
+            .Select(member => member.Config.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        if (stickyGroupIds.Count > 1)
+        {
+            IReadOnlyList<string> normalized =
+                WidgetCapsuleOrderCalculator.GroupContiguous(barOrder, stickyGroupIds);
+            if (!barOrder.SequenceEqual(normalized, StringComparer.Ordinal))
+            {
+                barOrder.Clear();
+                barOrder.AddRange(normalized);
                 changed = true;
             }
         }
@@ -1208,7 +1320,8 @@ public sealed partial class WidgetManager
         string direction,
         PointInt32 anchorPoint,
         string positionAnchor,
-        int spacing)
+        int spacing,
+        IReadOnlySet<string> stickyGroupIds)
     {
         public string ActiveWidgetId { get; } = activeWidgetId;
         public RectInt32 ActiveStartBounds { get; } = activeStartBounds;
@@ -1216,6 +1329,8 @@ public sealed partial class WidgetManager
         public RectInt32 WorkArea { get; set; } = workArea;
         public bool ReordersMember { get; } = reordersMember;
         public List<string> MemberOrder { get; set; } = memberOrder.ToList();
+        // 必须连在一起的一组成员（分类文件夹格子）。
+        public IReadOnlySet<string> StickyGroupIds { get; } = stickyGroupIds;
         // Both refresh when a Floating drag crosses monitors: later reorder
         // decisions and arrangement math must key off the current screen,
         // not the drag-start one.

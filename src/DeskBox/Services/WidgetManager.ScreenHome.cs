@@ -122,6 +122,17 @@ public sealed partial class WidgetManager
             // widget rows display; anchor-only commits raise nothing.
             NotifyScreenHomeChangedAction?.Invoke();
         }
+
+        // 展开的功能格子拖完要回到右侧列里、并按落点换位（用户口径：功能格子
+        // 上下位置要能任意调，且不能互相重叠）。文件夹格子不参与，保证 01…08
+        // 那一整块不被拖散。
+        if (source == WidgetPlacementSource.Drag &&
+            group is null &&
+            !config.IsCollapsed &&
+            config.WidgetKind != WidgetKind.File)
+        {
+            TryReorderBarMemberFromDrop(config, hostBounds);
+        }
     }
 
     /// <summary>

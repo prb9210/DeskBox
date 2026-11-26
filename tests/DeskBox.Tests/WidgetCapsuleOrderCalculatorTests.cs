@@ -125,4 +125,94 @@ public sealed class WidgetCapsuleOrderCalculatorTests
             new[] { "left-two", "right-one", "left-one", "right-two" },
             result);
     }
+
+    [Fact]
+    public void PointerCrossing_UsesSlotCenters_NotNearestSlot()
+    {
+        // 高矮不一的格子：只越过一格中心时，就应当换到那格之后，
+        // 不能因为「离自己原来的槽更近」而弹回去。
+        string[] order = ["tall", "short", "medium"];
+        RectInt32[] slots =
+        [
+            new(0, 0, 200, 120),
+            new(0, 128, 200, 42),
+            new(0, 178, 200, 64)
+        ];
+
+        IReadOnlyList<string> result = WidgetCapsuleOrderCalculator.MoveToPointer(
+            order,
+            slots,
+            "tall",
+            new RectInt32(0, 110, 200, 120),
+            SettingsService.WidgetCapsuleBarDirectionVertical);
+
+        Assert.Equal(new[] { "short", "tall", "medium" }, result);
+    }
+
+    [Fact]
+    public void FeatureWidget_CannotBeInsertedInsideTheFolderBlock()
+    {
+        string[] order = ["folder-1", "folder-2", "folder-3", "todo"];
+        RectInt32[] slots =
+        [
+            new(0, 0, 200, 60),
+            new(0, 68, 200, 60),
+            new(0, 136, 200, 60),
+            new(0, 204, 200, 120)
+        ];
+        var folders = new HashSet<string>(
+            ["folder-1", "folder-2", "folder-3"],
+            StringComparer.Ordinal);
+
+        // 把待办拖到第二个文件夹的位置（块内部）→ 只能吸到块前或块后。
+        IReadOnlyList<string> result = WidgetCapsuleOrderCalculator.MoveToPointer(
+            order,
+            slots,
+            "todo",
+            new RectInt32(0, 70, 200, 120),
+            SettingsService.WidgetCapsuleBarDirectionVertical,
+            folders);
+
+        Assert.Equal(new[] { "folder-1", "folder-2", "folder-3", "todo" }, result);
+    }
+
+    [Fact]
+    public void FolderMember_StaysInsideTheBlock()
+    {
+        string[] order = ["weather", "folder-1", "folder-2", "folder-3"];
+        RectInt32[] slots =
+        [
+            new(0, 0, 200, 60),
+            new(0, 68, 200, 60),
+            new(0, 136, 200, 60),
+            new(0, 204, 200, 60)
+        ];
+        var folders = new HashSet<string>(
+            ["folder-1", "folder-2", "folder-3"],
+            StringComparer.Ordinal);
+
+        IReadOnlyList<string> result = WidgetCapsuleOrderCalculator.MoveToPointer(
+            order,
+            slots,
+            "folder-1",
+            new RectInt32(0, -40, 200, 60),
+            SettingsService.WidgetCapsuleBarDirectionVertical,
+            folders);
+
+        Assert.Equal(new[] { "weather", "folder-1", "folder-2", "folder-3" }, result);
+    }
+
+    [Fact]
+    public void GroupContiguous_PullsSplitFoldersBackTogether()
+    {
+        var folders = new HashSet<string>(
+            ["f1", "f2", "f3"],
+            StringComparer.Ordinal);
+
+        IReadOnlyList<string> result = WidgetCapsuleOrderCalculator.GroupContiguous(
+            ["weather", "f1", "todo", "f2", "f3", "search"],
+            folders);
+
+        Assert.Equal(new[] { "weather", "f1", "f2", "f3", "todo", "search" }, result);
+    }
 }
