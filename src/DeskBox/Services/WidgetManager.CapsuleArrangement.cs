@@ -300,7 +300,7 @@ public sealed partial class WidgetManager
             WidgetPositioningService.GetDpiScale(workArea)));
 
         // 分类文件夹格子（01…08）必须连在一起：拖动时其它格子不能插进它们中间。
-        HashSet<string> stickyGroupIds = settings.Widgets
+        HashSet<string> stickyGroupIds = settings.WidgetLayout.Widgets
             .Where(config => memberBounds.ContainsKey(config.Id) &&
                 config.WidgetKind == WidgetKind.File)
             .Select(config => config.Id)
@@ -546,7 +546,7 @@ public sealed partial class WidgetManager
             return false;
         }
 
-        var memberOrder = settings.WidgetCapsuleBarOrder
+        var memberOrder = settings.WidgetShell.WidgetCapsuleBarOrder
             .Where(memberBounds.ContainsKey)
             .ToList();
         foreach (string id in memberBounds.Keys)
@@ -558,15 +558,15 @@ public sealed partial class WidgetManager
         }
 
         string placement = SettingsService.NormalizeWidgetCapsuleBarPlacement(
-            settings.WidgetCapsuleBarPlacement);
+            settings.WidgetShell.WidgetCapsuleBarPlacement);
         RectInt32 workArea = DisplayArea.GetFromRect(
             currentBounds,
             DisplayAreaFallback.Nearest).WorkArea;
         string direction = ResolveBarDirection(
-            settings.WidgetCapsuleBarDirection,
+            settings.WidgetShell.WidgetCapsuleBarDirection,
             placement,
             workArea);
-        HashSet<string> stickyGroupIds = settings.Widgets
+        HashSet<string> stickyGroupIds = settings.WidgetLayout.Widgets
             .Where(candidate => memberBounds.ContainsKey(candidate.Id) &&
                 candidate.WidgetKind == WidgetKind.File)
             .Select(candidate => candidate.Id)
@@ -582,10 +582,10 @@ public sealed partial class WidgetManager
         if (!memberOrder.SequenceEqual(reordered, StringComparer.Ordinal))
         {
             IReadOnlyList<string> merged = WidgetCapsuleOrderCalculator.MergeGroupOrder(
-                settings.WidgetCapsuleBarOrder,
+                settings.WidgetShell.WidgetCapsuleBarOrder,
                 reordered);
-            settings.WidgetCapsuleBarOrder.Clear();
-            settings.WidgetCapsuleBarOrder.AddRange(merged);
+            settings.WidgetShell.WidgetCapsuleBarOrder.Clear();
+            settings.WidgetShell.WidgetCapsuleBarOrder.AddRange(merged);
         }
 
         // 不管顺序变没变，落手后都让排布收口一次：展开卡片停在落点上就是重叠。
