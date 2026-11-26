@@ -190,6 +190,17 @@ public interface ISettingsWidgetActions
     Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(
         IReadOnlyList<string> folderPaths);
 
+    /// <summary>
+    /// Companion "按分类生成格子" rebuild, as one command: folder grids from
+    /// the previous taxonomy are retired (their folder contents move to the
+    /// desktop first), the current categories are created in order, and every
+    /// remaining grid folds into a capsule rail on the right edge — weather
+    /// first, search last.
+    /// </summary>
+    Task<CompanionWidgetResetResult> ResetCompanionCategoryWidgetsAsync(
+        string libraryFolder,
+        IReadOnlyList<string> categoryNames);
+
     /// <summary>Pushes this machine's logical layout to the engine.</summary>
     Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder);
 
@@ -199,6 +210,21 @@ public interface ISettingsWidgetActions
 
 /// <summary>Per-folder outcome of a companion "按分类生成格子" batch.</summary>
 public sealed record FolderWidgetCreateResult(string FolderPath, bool Created, string? Error = null);
+
+/// <summary>
+/// Outcome of the companion "按分类生成格子" rebuild: what was created, what was
+/// kept, what retired (and whether its files reached the desktop), and how many
+/// grids ended up on the capsule rail.
+/// </summary>
+public sealed record CompanionWidgetResetResult(
+    int CreatedCount,
+    int ReusedCount,
+    int RemovedCount,
+    int MovedFolderCount,
+    int LeftInPlaceCount,
+    int RailCount,
+    List<string> RemovedNames,
+    List<string> Errors);
 
 /// <summary>Result of a manual layout push/pull, shaped for the wire.</summary>
 public sealed record LayoutTransferResult(bool Ok, string Message);

@@ -285,6 +285,14 @@ public static class SettingsIpcMethods
 
     /// <summary>payload = library folder path; response = LayoutTransferResult.</summary>
     public const string CompanionLayoutPull = "companion.layout-pull";
+
+    /// <summary>
+    /// payload = SettingsIpcCompanionReset (library + category names);
+    /// response = CompanionWidgetResetResult. Retires the previous taxonomy's
+    /// folder grids, recreates the current categories and folds every grid
+    /// into the right-edge capsule rail.
+    /// </summary>
+    public const string CompanionResetCategoryWidgets = "companion.reset-category-widgets";
 }
 
 /// <summary>
@@ -333,6 +341,9 @@ public sealed record SettingsIpcStringPair(string A, string B);
 public sealed record SettingsIpcKindArg(int Kind, bool Enabled);
 
 public sealed record SettingsIpcOrphanDelete(string Path, long OwnerHwnd);
+
+/// <summary>Companion "按分类生成格子" rebuild request: shared library + taxonomy roots.</summary>
+public sealed record SettingsIpcCompanionReset(string LibraryFolder, List<string> CategoryNames);
 
 public sealed record SettingsIpcOrgUndo(string HistoryId, long OwnerHwnd);
 
@@ -440,6 +451,8 @@ public static class SettingsIpcPayload
 [JsonSerializable(typeof(DesktopOrganizationUndoResult))]
 [JsonSerializable(typeof(FolderWidgetCreateResult))]
 [JsonSerializable(typeof(List<FolderWidgetCreateResult>))]
+[JsonSerializable(typeof(SettingsIpcCompanionReset))]
+[JsonSerializable(typeof(CompanionWidgetResetResult))]
 [JsonSerializable(typeof(LayoutTransferResult))]
 [JsonSerializable(typeof(AppRelaunchScheduleResult))]
 [JsonSerializable(typeof(AppRuntimeHealthSnapshot))]

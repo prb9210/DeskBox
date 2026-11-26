@@ -116,6 +116,9 @@ public sealed class SettingsIpcClient : IAsyncDisposable
             // Companion: creating eight widgets one by one boots windows and
             // animations; the manual layout transfer hits the engine over HTTP.
             [SettingsIpcMethods.CompanionCreateFolderWidgets] = TimeSpan.FromMinutes(3),
+            // Retiring grids drains whole folders to the desktop before the
+            // eight windows get created and folded into the rail.
+            [SettingsIpcMethods.CompanionResetCategoryWidgets] = TimeSpan.FromMinutes(10),
             [SettingsIpcMethods.CompanionLayoutPush] = TimeSpan.FromMinutes(2),
             [SettingsIpcMethods.CompanionLayoutPull] = TimeSpan.FromMinutes(3),
             // Deep review R13: long-task stragglers the R3/R9 sweeps missed,

@@ -200,6 +200,12 @@ public sealed class LayoutWriteSyncTests : IDisposable
         public Task<IReadOnlyList<FolderWidgetCreateResult>> CreateFolderWidgetsAsync(IReadOnlyList<string> folderPaths) =>
             Task.FromResult<IReadOnlyList<FolderWidgetCreateResult>>(
                 folderPaths.Select(path => new FolderWidgetCreateResult(path, true)).ToList());
+        public Task<CompanionWidgetResetResult> ResetCompanionCategoryWidgetsAsync(
+            string libraryFolder,
+            IReadOnlyList<string> categoryNames) =>
+            Task.FromResult(new CompanionWidgetResetResult(
+                categoryNames.Count, 0, 0, 0, 0, categoryNames.Count,
+                new List<string>(), new List<string>()));
         public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
             Task.FromResult(new LayoutTransferResult(true, "pushed"));
         public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>

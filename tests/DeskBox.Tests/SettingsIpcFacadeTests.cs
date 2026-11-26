@@ -679,6 +679,13 @@ public sealed class SettingsIpcFacadeTests : IDisposable
             Task.FromResult<IReadOnlyList<FolderWidgetCreateResult>>(
                 folderPaths.Select(path => new FolderWidgetCreateResult(path, true)).ToList());
 
+        public Task<CompanionWidgetResetResult> ResetCompanionCategoryWidgetsAsync(
+            string libraryFolder,
+            IReadOnlyList<string> categoryNames) =>
+            Task.FromResult(new CompanionWidgetResetResult(
+                categoryNames.Count, 0, 1, 1, 0, categoryNames.Count,
+                new List<string> { "旧格子" }, new List<string>()));
+
         public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
             Task.FromResult(new LayoutTransferResult(true, "pushed"));
 
@@ -941,6 +948,14 @@ public sealed class SettingsIpcFacadeTests : IDisposable
             Assert.Equal(2, createdFolders.Count);
             Assert.All(createdFolders, result => Assert.True(result.Created));
             Assert.Equal("C:\\lib\\01 数学教学", createdFolders[0].FolderPath);
+
+            CompanionWidgetResetResult reset = await remote.ResetCompanionCategoryWidgetsAsync(
+                "C:\\lib",
+                ["01 数学教学", "02 教务考务"]);
+            Assert.Equal(2, reset.CreatedCount);
+            Assert.Equal(1, reset.RemovedCount);
+            Assert.Equal(2, reset.RailCount);
+            Assert.Single(reset.RemovedNames);
 
             LayoutTransferResult pushed = await remote.PushLayoutAsync("C:\\lib");
             Assert.True(pushed.Ok);

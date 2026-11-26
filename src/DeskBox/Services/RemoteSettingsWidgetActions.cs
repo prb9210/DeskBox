@@ -499,6 +499,39 @@ public sealed class RemoteSettingsWidgetActions : ISettingsWidgetActions
         }
     }
 
+    /// <summary>
+    /// The companion rebuild rides the pipe like the create batch: the
+    /// settings host owns no widget manager, and the pass (retire → create →
+    /// fold) can take minutes, so its ceiling is raised in
+    /// <c>SettingsIpcClient.MethodTimeouts</c>.
+    /// </summary>
+    public async Task<CompanionWidgetResetResult> ResetCompanionCategoryWidgetsAsync(
+        string libraryFolder,
+        IReadOnlyList<string> categoryNames)
+    {
+        try
+        {
+            (bool ok, string? payload, string? error) = await _client.RequestAsync(
+                SettingsIpcMethods.CompanionResetCategoryWidgets,
+                SettingsIpcPayload.Encode(
+                    new SettingsIpcCompanionReset(libraryFolder, categoryNames.ToList()),
+                    SettingsIpcJsonContext.Default.SettingsIpcCompanionReset));
+            if (ok && SettingsIpcPayload.Decode(
+                    payload,
+                    SettingsIpcJsonContext.Default.CompanionWidgetResetResult) is { } result)
+            {
+                return result;
+            }
+
+            throw new InvalidOperationException(error ?? "主程序没有回应");
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Companion] Reset category widgets failed: {ex.Message}");
+            throw new InvalidOperationException("重建分类格子失败：" + ex.Message, ex);
+        }
+    }
+
     public Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder) =>
         RequestLayoutTransferAsync(SettingsIpcMethods.CompanionLayoutPush, libraryFolder);
 

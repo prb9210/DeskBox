@@ -405,6 +405,19 @@ public sealed class SettingsIpcMethodRouter
                     createResults.ToList(),
                     SettingsIpcJsonContext.Default.ListFolderWidgetCreateResult), null);
 
+            case SettingsIpcMethods.CompanionResetCategoryWidgets:
+                if (_widget is null) return unavailable(method);
+                SettingsIpcCompanionReset? resetRequest = SettingsIpcPayload.Decode(
+                    payload, SettingsIpcJsonContext.Default.SettingsIpcCompanionReset);
+                if (resetRequest is null) return (false, null, "missing payload");
+                CompanionWidgetResetResult resetResult =
+                    await _widget.ResetCompanionCategoryWidgetsAsync(
+                        resetRequest.LibraryFolder,
+                        resetRequest.CategoryNames);
+                return (true, SettingsIpcPayload.Encode(
+                    resetResult,
+                    SettingsIpcJsonContext.Default.CompanionWidgetResetResult), null);
+
             case SettingsIpcMethods.CompanionLayoutPush:
                 if (_widget is null) return unavailable(method);
                 return (true, SettingsIpcPayload.Encode(

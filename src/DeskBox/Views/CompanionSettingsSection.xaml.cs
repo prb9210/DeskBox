@@ -572,15 +572,11 @@ public sealed partial class CompanionSettingsSection : UserControl
                 roots.AddRange(FallbackCategoryRoots);
             }
 
-            if (Application.Current is not App app)
-            {
-                GenerateWidgetsMessage.Text = "程序还没就绪，重启 DeskBox 再试。";
-                return;
-            }
-
-            // 4) 生成：走 ISettingsWidgetActions。设置窗口跑在独立的设置进程里，
+            // 4) 重建：走 ISettingsWidgetActions。设置窗口跑在独立的设置进程里，
             //    那边永远没有 WidgetManager —— 直接等 App.WidgetManager 只会空等
-            //    20 秒。宿主把这一调用转给主进程执行。
+            //    20 秒。宿主把这一调用转给主进程执行：旧分类的格子先清掉（文件夹
+            //    内容搬到桌面，让引擎重新归位），分类补齐，剩下的全部折叠成贴着
+            //    屏幕右边缘的胶囊（天气最上，01…08 按序，搜索最下）。
             if (_widgetActions is not { } widgetActions)
             {
                 GenerateWidgetsMessage.Text =
@@ -588,84 +584,50 @@ public sealed partial class CompanionSettingsSection : UserControl
                 return;
             }
 
-            HashSet<string> existing = new(StringComparer.OrdinalIgnoreCase);
-            foreach (DeskBox.Models.WidgetConfig widget in app.SettingsService.Settings.WidgetLayout.Widgets)
+            GenerateWidgetsMessage.Text = "正在重建分类格子（清旧格子 → 补分类 → 折叠排版）…";
+            CompanionWidgetResetResult result =
+                await widgetActions.ResetCompanionCategoryWidgetsAsync(library, roots);
+
+            var summary = new StringBuilder();
+            summary.Append("已按分类重建：新建 ").Append(result.CreatedCount)
+                .Append(" 个、保留 ").Append(result.ReusedCount).Append(" 个");
+            if (result.RemovedCount > 0)
             {
-                if (!string.IsNullOrWhiteSpace(widget.MappedFolderPath))
+                summary.Append("；清掉旧格子 ").Append(result.RemovedCount).Append(" 个");
+                if (result.RemovedNames.Count > 0)
                 {
-                    existing.Add(NormalizeFolderPath(widget.MappedFolderPath!));
+                    summary.Append("（").Append(string.Join("、", result.RemovedNames.Take(8)));
+                    if (result.RemovedNames.Count > 8)
+                    {
+                        summary.Append(" 等");
+                    }
+
+                    summary.Append("）");
+                }
+
+                if (result.MovedFolderCount > 0)
+                {
+                    summary.Append("，其中 ").Append(result.MovedFolderCount)
+                        .Append(" 个文件夹的文件已移到桌面");
+                }
+
+                if (result.LeftInPlaceCount > 0)
+                {
+                    summary.Append("，").Append(result.LeftInPlaceCount)
+                        .Append(" 个不在共享库内的文件夹原样保留");
                 }
             }
 
-            int skipped = 0;
-            List<string> missing = new();
-            Dictionary<string, string> nameByPath = new(StringComparer.OrdinalIgnoreCase);
-            foreach (string name in roots)
+            summary.Append("。已折叠 ").Append(result.RailCount)
+                .Append(" 个格子贴到屏幕右侧：天气在最上，01…08 按顺序，搜索在最下。");
+
+            if (result.Errors.Count > 0)
             {
-                string path = NormalizeFolderPath(Path.Combine(library, name));
-                if (existing.Contains(path))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                try
-                {
-                    Directory.CreateDirectory(path);
-                }
-                catch (Exception ex)
-                {
-                    nameByPath[path] = name + "（目录不可用：" + ex.Message + "）";
-                    missing.Add(path);
-                    continue;
-                }
-
-                nameByPath[path] = name;
-                missing.Add(path);
+                summary.Append("\n有 ").Append(result.Errors.Count).Append(" 处没成功：")
+                    .Append(string.Join("；", result.Errors));
             }
 
-            if (missing.Count == 0)
-            {
-                GenerateWidgetsMessage.Text = "没有新建：这些分类都已有格子（" +
-                    skipped + " 个跳过）。展开悬浮球就能看到。";
-                return;
-            }
-
-            GenerateWidgetsMessage.Text = "正在生成 " + missing.Count + " 个分类格子…";
-            IReadOnlyList<FolderWidgetCreateResult> results =
-                await widgetActions.CreateFolderWidgetsAsync(missing);
-
-            List<string> created = new();
-            List<string> failed = new();
-            foreach (FolderWidgetCreateResult result in results)
-            {
-                string label = nameByPath.TryGetValue(result.FolderPath, out string? name)
-                    ? name
-                    : Path.GetFileName(result.FolderPath);
-                if (result.Created)
-                {
-                    created.Add(label);
-                }
-                else
-                {
-                    failed.Add(label + "：" + (result.Error ?? "未知原因"));
-                }
-            }
-
-            string summary = created.Count > 0
-                ? "已生成 " + created.Count + " 个分类格子"
-                : "没有生成任何格子";
-
-            if (skipped > 0)
-            {
-                summary += "（" + skipped + " 个已存在，跳过）";
-            }
-
-            summary += "。展开悬浮球就能看到，点扇片可显示／收起。";
-
-            GenerateWidgetsMessage.Text = failed.Count == 0
-                ? summary
-                : summary + " 失败 " + failed.Count + " 个：" + string.Join("；", failed);
+            GenerateWidgetsMessage.Text = summary.ToString();
         }
         catch (Exception ex)
         {
@@ -779,18 +741,6 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
 
         return library;
-    }
-
-    private static string NormalizeFolderPath(string path)
-    {
-        try
-        {
-            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        }
-        catch
-        {
-            return Path.TrimEndingDirectorySeparator(path);
-        }
     }
 
     private async void MoveSourceButton_Click(object sender, RoutedEventArgs e)

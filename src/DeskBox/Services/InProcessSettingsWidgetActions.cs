@@ -591,6 +591,24 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
         return results;
     }
 
+    /// <summary>
+    /// The companion rebuild, on the UI thread: it retires widgets, drains
+    /// their folders to the desktop and moves real windows, so it must never
+    /// run on an IPC pool thread.
+    /// </summary>
+    public async Task<CompanionWidgetResetResult> ResetCompanionCategoryWidgetsAsync(
+        string libraryFolder,
+        IReadOnlyList<string> categoryNames)
+    {
+        if (_widgetManager is not { } manager)
+        {
+            throw new InvalidOperationException("格子管理器还没就绪，请重启 DeskBox 再试。");
+        }
+
+        return await DeskBox.Platform.UiDispatch.RunAsync(
+            () => manager.ResetCompanionCategoryWidgetsAsync(libraryFolder, categoryNames));
+    }
+
     public async Task<LayoutTransferResult> PushLayoutAsync(string libraryFolder)
     {
         if (Application.Current is not App app || app.WidgetManager is null)

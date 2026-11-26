@@ -16,9 +16,13 @@ public partial class App
     private static readonly string[] CompanionLibraryFolders =
     {
         "01 数学教学",
-        "02 教导处",
-        "03 上级文件",
-        "04 其他",
+        "02 教务考务",
+        "03 控辍保学",
+        "04 上级文件",
+        "05 班级管理",
+        "06 家校沟通",
+        "07 教研与进修",
+        "08 行政与事务",
     };
 
     private void StartCompanionHostAndMapLibrary()
