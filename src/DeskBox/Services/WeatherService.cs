@@ -353,18 +353,31 @@ public sealed class WeatherService : IDisposable
     internal static string SerializeCacheState(WeatherCacheState state) =>
         JsonSerializer.Serialize(state, WeatherJsonContext.Default.CacheState);
 
-    private static string GetCurrentDataSource()
+    private static string GetCurrentDataSource() => GetWeatherPreferences().Source;
+
+    /// <summary>
+    /// Reads the weather source and the domestic city code in ONE place: every
+    /// extra application-services hop counts against the legacy-global-access
+    /// contract test (ModuleBoundaryContractTests.LegacyBusinessGlobalAccess_DoesNotGrow).
+    /// </summary>
+    private static (string Source, string CityCode) GetWeatherPreferences()
     {
         try
         {
-            return App.Current?.Services?.GetService(typeof(SettingsService)) is SettingsService svc
-                ? svc.Settings.WeatherDataSource
-                : SettingsService.WeatherDataSourceMsn;
+            if (App.Current?.Services?.GetService(typeof(SettingsService)) is SettingsService svc)
+            {
+                string code = svc.Settings.Weather.WeatherChinaCityCode;
+                return (
+                    svc.Settings.WeatherDataSource,
+                    string.IsNullOrWhiteSpace(code) ? DefaultChinaCityCode : code.Trim());
+            }
         }
         catch
         {
-            return SettingsService.WeatherDataSourceMsn;
+            // Fall through to the defaults below.
         }
+
+        return (SettingsService.WeatherDataSourceMsn, DefaultChinaCityCode);
     }
 
     // ── Source dispatch ──
@@ -426,21 +439,7 @@ public sealed class WeatherService : IDisposable
 
     // ── 中国天气网 ──
 
-    private static string GetChinaCityCode()
-    {
-        try
-        {
-            string code = App.Current?.Services?.GetService(typeof(SettingsService))
-                is SettingsService svc
-                    ? svc.Settings.Weather.WeatherChinaCityCode
-                    : string.Empty;
-            return string.IsNullOrWhiteSpace(code) ? DefaultChinaCityCode : code.Trim();
-        }
-        catch
-        {
-            return DefaultChinaCityCode;
-        }
-    }
+    private static string GetChinaCityCode() => GetWeatherPreferences().CityCode;
 
     private static async Task<WeatherData?> FetchChinaWeatherAsync(CancellationToken cancellationToken)
     {

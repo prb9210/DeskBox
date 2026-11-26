@@ -16,11 +16,6 @@ public sealed class WeatherSettingsSlice
     /// </summary>
     public string WeatherCityName { get; set; } = string.Empty;
 
-    /// <summary>
-    /// 中国天气网城市代码（默认 101282002 = 广东高州）。国内天气源用它定位，
-    /// 不需要经纬度，所以内网封掉境外 geocoding 时也能出天气。
-    /// </summary>
-    public string WeatherChinaCityCode { get; set; } = "101282002";
 
     /// <summary>
     /// Saved latitude for manual location.
@@ -103,4 +98,11 @@ public sealed class WeatherSettingsSlice
     /// Refresh interval in minutes. Valid values: 15, 30, 60, 180.
     /// </summary>
     public int WeatherRefreshIntervalMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// 中国天气网城市代码（默认 101282002 = 广东高州）。国内天气源用它定位，
+    /// 不需要经纬度，所以内网封掉境外 geocoding 时也能出天气。
+    /// 新成员只能加在末尾：SerializedMemberOrder_MatchesPreSliceDeclarationOrder 盯着顺序。
+    /// </summary>
+    public string WeatherChinaCityCode { get; set; } = "101282002";
 }

@@ -687,9 +687,6 @@ public class AppSettings
     /// <inheritdoc cref="WeatherSettingsSlice.WeatherCityName"/>
     public string WeatherCityName { get => Weather.WeatherCityName; set => Weather.WeatherCityName = value; }
 
-    /// <inheritdoc cref="WeatherSettingsSlice.WeatherChinaCityCode"/>
-    public string WeatherChinaCityCode { get => Weather.WeatherChinaCityCode; set => Weather.WeatherChinaCityCode = value; }
-
     /// <inheritdoc cref="WeatherSettingsSlice.WeatherLatitude"/>
     public double WeatherLatitude { get => Weather.WeatherLatitude; set => Weather.WeatherLatitude = value; }
 
