@@ -366,10 +366,7 @@ public sealed class WeatherService : IDisposable
         {
             if (App.Current?.Services?.GetService(typeof(SettingsService)) is SettingsService svc)
             {
-                string code = svc.Settings.Weather.WeatherChinaCityCode;
-                return (
-                    svc.Settings.WeatherDataSource,
-                    string.IsNullOrWhiteSpace(code) ? DefaultChinaCityCode : code.Trim());
+                return (svc.Settings.WeatherDataSource, DefaultChinaCityCode);
             }
         }
         catch

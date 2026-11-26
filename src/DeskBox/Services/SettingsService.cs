@@ -677,7 +677,6 @@ settings.WeatherDefaultView = WeatherDefaultViewToday;
 settings.WeatherSkin = WeatherSkinStandard;
 settings.WeatherIconStyle = WeatherIconStyleFluent;
 settings.WeatherDataSource = WeatherDataSourceMsn;
-settings.Weather.WeatherChinaCityCode = "101282002";
 settings.WeatherShowForecast = true;
 settings.WeatherShowSunrise = true;
 settings.WeatherShowUvIndex = true;
