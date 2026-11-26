@@ -85,11 +85,6 @@ public sealed partial class WidgetManager
             throw new InvalidOperationException("分类清单是空的，没有格子可生成。");
         }
 
-        var removedNames = new List<string>();
-        var errors = new List<string>();
-        int movedFolders = 0;
-        int leftInPlace = 0;
-
         // ── 1. Retire the grids of the previous taxonomy ────────────────────
         // Only folder-backed file grids participate: a manual widget (no
         // MappedFolderPath) owns no category folder and is left alone.
