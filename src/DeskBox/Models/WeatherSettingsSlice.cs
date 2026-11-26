@@ -17,6 +17,12 @@ public sealed class WeatherSettingsSlice
     public string WeatherCityName { get; set; } = string.Empty;
 
     /// <summary>
+    /// 中国天气网城市代码（默认 101282002 = 广东高州）。国内天气源用它定位，
+    /// 不需要经纬度，所以内网封掉境外 geocoding 时也能出天气。
+    /// </summary>
+    public string WeatherChinaCityCode { get; set; } = "101282002";
+
+    /// <summary>
     /// Saved latitude for manual location.
     /// </summary>
     public double WeatherLatitude { get; set; }

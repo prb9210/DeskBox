@@ -51,6 +51,9 @@ public static class WeatherOptionKinds
     public const string DataSourceMsn = "MSN";
     public const string DataSourceOpenMeteo = "OpenMeteo";
 
+    /// <summary>中国天气网（第三方 JSON 镜像，国内直连，内网封境外站点时仍可用）。</summary>
+    public const string DataSourceChina = "China";
+
     public const int RefreshMinMinutes = 15;
     public const int RefreshMaxMinutes = 180;
     public const int DefaultRefreshIntervalMinutes = 60;
@@ -93,7 +96,12 @@ public static class WeatherOptionKinds
         : DefaultIconStyle;
 
     public static string NormalizeDataSource(string? source) =>
-        source == DataSourceOpenMeteo ? DataSourceOpenMeteo : DataSourceMsn;
+        source switch
+        {
+            DataSourceOpenMeteo => DataSourceOpenMeteo,
+            DataSourceChina => DataSourceChina,
+            _ => DataSourceMsn
+        };
 
     public static int NormalizeRefreshInterval(int minutes) =>
         Math.Clamp(minutes, RefreshMinMinutes, RefreshMaxMinutes);

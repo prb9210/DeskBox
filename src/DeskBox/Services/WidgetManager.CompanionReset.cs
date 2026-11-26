@@ -444,6 +444,37 @@ public sealed partial class WidgetManager
         return ordered.Count;
     }
 
+    /// <summary>Category-folder paths currently mapped by file widgets, name-ordered.</summary>
+    private List<string> CurrentFolderWidgetPaths()
+    {
+        var paths = new List<string>();
+        foreach (WidgetConfig config in _settingsService.Settings.WidgetLayout.Widgets)
+        {
+            if (config.WidgetKind != WidgetKind.File ||
+                IsDeleted(config.Id) ||
+                string.IsNullOrWhiteSpace(config.MappedFolderPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                string path = NormalizeCompanionPath(config.MappedFolderPath!);
+                if (!paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+                {
+                    paths.Add(path);
+                }
+            }
+            catch
+            {
+                // Unreadable path: it simply carries no rank.
+            }
+        }
+
+        paths.Sort(StringComparer.CurrentCultureIgnoreCase);
+        return paths;
+    }
+
     private static string NormalizeCompanionPath(string path) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 

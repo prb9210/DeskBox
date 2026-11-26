@@ -1021,6 +1021,23 @@ public sealed partial class WidgetManager
             return;
         }
 
+        await SetFeatureWidgetEnabledCoreAsync(kind, enabled, reveal);
+
+        if (!enabled)
+        {
+            return;
+        }
+
+        // 打开功能格子（天气/音乐/待办/搜索…）后，新建的窗口是展开态，会直接压在
+        // 右侧胶囊列上面（用户报过“吸附到右边但仍与原格子重叠、显示不协调”）。
+        // 统一并进右侧胶囊列：折叠 + 按 天气→分类→其他→搜索 的顺序重排。
+        ArrangeCompanionCapsuleRail(CurrentFolderWidgetPaths());
+        await _settingsService.SaveAsync();
+    }
+
+    private async Task SetFeatureWidgetEnabledCoreAsync(WidgetKind kind, bool enabled, bool reveal)
+    {
+
         if (kind == WidgetKind.QuickCapture && _quickCaptureSettings is not null)
         {
             await _quickCaptureSettings.SetEnabledAsync(enabled, reveal);

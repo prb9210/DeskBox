@@ -366,6 +366,9 @@ public const string WeatherIconStyleLine = WeatherOptionKinds.IconStyleLine;
 public const string WeatherIconStyleFluent = WeatherOptionKinds.IconStyleFluent;
 public const string WeatherDataSourceMsn = WeatherOptionKinds.DataSourceMsn;
 public const string WeatherDataSourceOpenMeteo = WeatherOptionKinds.DataSourceOpenMeteo;
+
+    /// <summary>中国天气网数据源（国内直连，学校内网封境外站点时的兜底）。</summary>
+    public const string WeatherDataSourceChina = WeatherOptionKinds.DataSourceChina;
 public const int WeatherRefreshMinMinutes = WeatherOptionKinds.RefreshMinMinutes;
 public const int WeatherRefreshMaxMinutes = WeatherOptionKinds.RefreshMaxMinutes;
 public const int DefaultSearchMaxResults = 100;
@@ -674,6 +677,7 @@ settings.WeatherDefaultView = WeatherDefaultViewToday;
 settings.WeatherSkin = WeatherSkinStandard;
 settings.WeatherIconStyle = WeatherIconStyleFluent;
 settings.WeatherDataSource = WeatherDataSourceMsn;
+settings.Weather.WeatherChinaCityCode = "101282002";
 settings.WeatherShowForecast = true;
 settings.WeatherShowSunrise = true;
 settings.WeatherShowUvIndex = true;
@@ -4045,9 +4049,12 @@ settings.FocusClickedWidgetOnRaise = false;
             changed = true;
         }
 
-        string normalizedDataSource = settings.WeatherDataSource is WeatherDataSourceOpenMeteo
-            ? WeatherDataSourceOpenMeteo
-            : WeatherDataSourceMsn;
+        string normalizedDataSource = settings.WeatherDataSource switch
+        {
+            WeatherDataSourceOpenMeteo => WeatherDataSourceOpenMeteo,
+            WeatherDataSourceChina => WeatherDataSourceChina,
+            _ => WeatherDataSourceMsn
+        };
         if (!string.Equals(settings.WeatherDataSource, normalizedDataSource, StringComparison.Ordinal))
         {
             settings.WeatherDataSource = normalizedDataSource;
