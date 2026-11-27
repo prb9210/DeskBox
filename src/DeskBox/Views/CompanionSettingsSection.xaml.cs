@@ -821,9 +821,9 @@ public sealed partial class CompanionSettingsSection : UserControl
 
         var settings = global::DeskBox.App.Current.SettingsService.Settings;
         int count = 0;
-        foreach (global::DeskBox.Models.WidgetConfig widget in settings.Widgets)
+        foreach (global::DeskBox.Models.WidgetConfig widget in settings.WidgetLayout.Widgets)
         {
-            if (widget.IsDisabled || settings.DeletedWidgetIds.Contains(widget.Id))
+            if (widget.IsDisabled || settings.WidgetLayout.DeletedWidgetIds.Contains(widget.Id))
             {
                 continue;
             }
