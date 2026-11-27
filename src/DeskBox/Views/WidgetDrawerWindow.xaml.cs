@@ -1690,7 +1690,7 @@ public sealed partial class WidgetDrawerWindow : Window
                     IsChecked = false,
                     Tag = note.Id
                 };
-                check.Checked += (sender, _) =>
+                check.Checked += async (sender, args) =>
                 {
                     if (sender is CheckBox checkbox && checkbox.Tag is string id)
                     {
@@ -1704,7 +1704,7 @@ public sealed partial class WidgetDrawerWindow : Window
                         }
 
                         _settings.Save();
-                        _ = RefreshBadgeAsync();
+                        await RefreshBadgeAsync();
                     }
                 };
                 panel.Children.Add(check);
