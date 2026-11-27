@@ -121,6 +121,10 @@
                                   Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
                         <CheckBox x:Name="DrawerFullScreenCheck" Content="全屏时自动隐藏"
                                   Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
+                        <CheckBox x:Name="DrawerClipboardCheck" Content="记录剪贴板历史"
+                                  Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
+                        <Button Content="清空剪贴板" Click="DrawerClearClipboard_Click"
+                                Padding="8,2" FontSize="12" />
                     </StackPanel>
 
                     <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center"

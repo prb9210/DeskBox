@@ -34,6 +34,8 @@ public partial class App
     private DateTimeOffset _drawerCountdownEnd;
     private DispatcherQueueTimer? _drawerFullScreenTimer;
     private bool _drawerHiddenForFullscreen;
+    private Microsoft.UI.Dispatching.DispatcherQueue? _drawerUiQueue;
+    private bool _clipboardHooked;
 
     /// <summary>True when no widget is currently on the desktop.</summary>
     internal bool WidgetsParked => WidgetManager is { } manager && !manager.HasVisibleWidgets;
@@ -199,6 +201,7 @@ public partial class App
         }
 
         ApplyDrawerFullScreenWatch();
+        StartClipboardWatch();
         _ = ApplyParkedWidgetsAsync();
     }
 
@@ -622,11 +625,107 @@ public partial class App
         }
     }
 
+    // ------------------------------------------------------------ clipboard
+
+    /// <summary>
+    /// 剪贴板历史。ContentChanged 可能在后台线程触发，读剪贴板又是 STA 要求，
+    /// 所以一律抛回 UI 线程处理。只收 1–2000 字的纯文本，跳掉连续重复。
+    /// </summary>
+    internal void StartClipboardWatch()
+    {
+        if (_clipboardHooked)
+        {
+            return;
+        }
+
+        try
+        {
+            _drawerUiQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            global::Windows.ApplicationModel.DataTransfer.Clipboard.ContentChanged += Clipboard_ContentChanged;
+            _clipboardHooked = true;
+        }
+        catch (Exception ex)
+        {
+            Log($"[Drawer] clipboard watch failed: {ex.Message}");
+        }
+    }
+
+    private void Clipboard_ContentChanged(object? sender, object e)
+    {
+        if (!DrawerSettings.ClipboardHistory)
+        {
+            return;
+        }
+
+        _drawerUiQueue?.TryEnqueue(() => _ = CaptureClipboardAsync());
+    }
+
+    private async Task CaptureClipboardAsync()
+    {
+        try
+        {
+            global::Windows.ApplicationModel.DataTransfer.DataPackageView view =
+                global::Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (!view.Contains(global::Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
+            {
+                return;
+            }
+
+            string text = (await view.GetTextAsync()).Trim();
+            if (text.Length == 0 || text.Length > 2000)
+            {
+                return;
+            }
+
+            if (DrawerSettings.Clipboard.Count > 0 &&
+                string.Equals(DrawerSettings.Clipboard[0], text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            DrawerSettings.Clipboard.RemoveAll(entry => string.Equals(entry, text, StringComparison.Ordinal));
+            DrawerSettings.Clipboard.Insert(0, text);
+            while (DrawerSettings.Clipboard.Count > WidgetDrawerSettings.MaxClipboardEntries)
+            {
+                DrawerSettings.Clipboard.RemoveAt(DrawerSettings.Clipboard.Count - 1);
+            }
+
+            DrawerSettings.Save();
+        }
+        catch (Exception ex)
+        {
+            Log($"[Drawer] clipboard capture failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>把历史里的一条放回剪贴板。</summary>
+    internal void CopyClipboardEntry(string text)
+    {
+        try
+        {
+            var package = new DataPackage();
+            package.SetText(text);
+            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            FlashDrawerGlyph("✓", "已复制", text.Length > 40 ? text.Substring(0, 40) + "…" : text);
+        }
+        catch (Exception ex)
+        {
+            Log($"[Drawer] clipboard copy failed: {ex.Message}");
+        }
+    }
+
+    internal void ClearClipboardHistory()
+    {
+        DrawerSettings.Clipboard.Clear();
+        DrawerSettings.Save();
+        FlashDrawerGlyph("✓", "剪贴板历史已清空", null);
+    }
+
     // ------------------------------------------------------------- screenshot
 
     /// <summary>
     /// 全屏截图。AOT 下不能用 System.Drawing，所以交给系统 PowerShell（Win10/11
-    /// 自带）画一张 PNG，再放进剪贴板；存到「资料库\_截图」。
+    /// 自带）画一张 PNG，再放进剪贴板；存到「资料库\_暂存\yyyyMMdd」，随手就能归类。
     /// </summary>
     internal async Task CaptureDrawerScreenshotAsync()
     {
@@ -638,8 +737,8 @@ public partial class App
             return;
         }
 
-        string folder = Path.Combine(library, "_截图");
-        string file = Path.Combine(folder, DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png");
+        string folder = Path.Combine(library, "_暂存", DateTime.Now.ToString("yyyyMMdd"));
+        string file = Path.Combine(folder, "截图_" + DateTime.Now.ToString("HHmmss") + ".png");
         try
         {
             Directory.CreateDirectory(folder);

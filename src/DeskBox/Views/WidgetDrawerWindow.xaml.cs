@@ -1515,6 +1515,30 @@ public sealed partial class WidgetDrawerWindow : Window
             shortcuts.Items.Add(new MenuFlyoutItem { Text = "（在设置页添加）", IsEnabled = false });
         }
 
+        // ── 剪贴板历史 ────────────────────────────────────────────
+        var clipboard = new MenuFlyoutSubItem { Text = "剪贴板", Icon = new FontIcon { Glyph = "\uE77F" } };
+        foreach (string entry in _settings.Clipboard)
+        {
+            string captured = entry;
+            string oneLine = captured.Replace("\r", " ").Replace("\n", " ");
+            string preview = oneLine.Length > 20 ? oneLine.Substring(0, 20) + "…" : oneLine;
+            var item = new MenuFlyoutItem { Text = preview };
+            item.Click += (_, _) => app.CopyClipboardEntry(captured);
+            clipboard.Items.Add(item);
+        }
+
+        if (clipboard.Items.Count == 0)
+        {
+            clipboard.Items.Add(new MenuFlyoutItem { Text = "（还没有记录）", IsEnabled = false });
+        }
+        else
+        {
+            var clearClipboard = new MenuFlyoutItem { Text = "清空历史" };
+            clearClipboard.Click += (_, _) => app.ClearClipboardHistory();
+            clipboard.Items.Add(new MenuFlyoutSeparator());
+            clipboard.Items.Add(clearClipboard);
+        }
+
         // ── 常用短语 ──────────────────────────────────────────────
         var phrases = new MenuFlyoutSubItem { Text = "常用短语", Icon = new FontIcon { Glyph = "\uE8BD" } };
         foreach (string phrase in _settings.Phrases)
@@ -1547,7 +1571,7 @@ public sealed partial class WidgetDrawerWindow : Window
             recent.Items.Add(new MenuFlyoutItem { Text = "（还没有整理记录）", IsEnabled = false });
         }
 
-        var capture = new MenuFlyoutItem { Text = "截图（存到资料库\\_截图）", Icon = new FontIcon { Glyph = "\uE722" } };
+        var capture = new MenuFlyoutItem { Text = "截图（存到暂存）", Icon = new FontIcon { Glyph = "\uE722" } };
         capture.Click += async (_, _) => await app.CaptureDrawerScreenshotAsync();
 
         var timer = new MenuFlyoutItem { Text = "考试倒计时…", Icon = new FontIcon { Glyph = "\uE916" } };
@@ -1626,6 +1650,7 @@ public sealed partial class WidgetDrawerWindow : Window
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(note);
         flyout.Items.Add(notes);
+        flyout.Items.Add(clipboard);
         flyout.Items.Add(phrases);
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(capture);

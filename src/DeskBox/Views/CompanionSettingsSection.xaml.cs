@@ -768,6 +768,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             DrawerVisibleCheck.IsChecked = _drawerDraft.Visible;
             DrawerIdleFadeCheck.IsChecked = _drawerDraft.IdleFade;
             DrawerFullScreenCheck.IsChecked = _drawerDraft.AutoHideFullScreen;
+            DrawerClipboardCheck.IsChecked = _drawerDraft.ClipboardHistory;
             DrawerFillBox.Text = _drawerDraft.Custom.Fill;
             DrawerOpacitySlider.Value = Math.Clamp(_drawerDraft.Custom.Opacity * 100, 25, 100);
             DrawerHighlightSlider.Value = Math.Clamp(_drawerDraft.Custom.Highlight * 100, 0, 60);
@@ -830,6 +831,32 @@ public sealed partial class CompanionSettingsSection : UserControl
     private async void DrawerApplyButton_Click(object sender, RoutedEventArgs e) =>
         await ApplyDrawerSettingsAsync();
 
+    /// <summary>清空历史只能改磁盘上那份再让主进程重载——设置页手里的 Clipboard 可能已过期。</summary>
+    private async void DrawerClearClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            WidgetDrawerSettings fresh = WidgetDrawerSettings.Load();
+            fresh.Clipboard.Clear();
+            fresh.Save();
+            if (_drawerDraft is not null)
+            {
+                _drawerDraft.Clipboard.Clear();
+            }
+
+            if (_widgetActions is not null)
+            {
+                await _widgetActions.ReloadDrawerSettingsAsync();
+            }
+
+            DrawerMessage.Text = "剪贴板历史已清空";
+        }
+        catch (Exception ex)
+        {
+            DrawerMessage.Text = "清空失败：" + ex.Message;
+        }
+    }
+
     private async Task ApplyDrawerSettingsAsync()
     {
         if (_drawerLoading || _drawerDraft is null)
@@ -844,6 +871,7 @@ public sealed partial class CompanionSettingsSection : UserControl
             _drawerDraft.Visible = DrawerVisibleCheck.IsChecked == true;
             _drawerDraft.IdleFade = DrawerIdleFadeCheck.IsChecked == true;
             _drawerDraft.AutoHideFullScreen = DrawerFullScreenCheck.IsChecked == true;
+            _drawerDraft.ClipboardHistory = DrawerClipboardCheck.IsChecked == true;
 
             int shapeIndex = Math.Clamp(DrawerShapeBox.SelectedIndex, 0, WidgetDrawerSettings.Shapes.Count - 1);
             _drawerDraft.Shape = WidgetDrawerSettings.Shapes[shapeIndex].Id;
@@ -859,6 +887,8 @@ public sealed partial class CompanionSettingsSection : UserControl
                 Rim = DrawerRimSlider.Value / 100.0
             };
 
+            // 主进程可能刚记了几条新复制；以磁盘为准，别用设置页加载时的旧列表覆盖。
+            _drawerDraft.Clipboard = WidgetDrawerSettings.Load(_drawerDraft.Path).Clipboard;
             _drawerDraft.Shortcuts = ParseShortcutLines(DrawerShortcutsBox.Text);
             _drawerDraft.Phrases = SplitLines(DrawerPhrasesBox.Text);
             _drawerDraft.Save();

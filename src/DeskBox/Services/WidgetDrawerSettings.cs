@@ -79,6 +79,9 @@ public sealed class WidgetDrawerSettings
     /// <summary>默认收起尺寸（完整球 56 DIP）。</summary>
     public const double DefaultBallDiameter = 56;
 
+    /// <summary>剪贴板历史保留条数。</summary>
+    public const int MaxClipboardEntries = 20;
+
     /// <summary>六款玻璃主题 + 自定义。纯色预设已全部删除——用户明确不要高饱和实心球。</summary>
     public static readonly IReadOnlyList<DrawerGlassPreset> Glasses = new[]
     {
@@ -126,6 +129,13 @@ public sealed class WidgetDrawerSettings
     /// <summary>全屏应用（投影、视频）在前台时自动隐藏球。</summary>
     [JsonPropertyName("auto_hide_fullscreen")]
     public bool AutoHideFullScreen { get; set; }
+
+    /// <summary>记录最近复制过的文字（最多 20 条），球上一键再贴。</summary>
+    [JsonPropertyName("clipboard_history")]
+    public bool ClipboardHistory { get; set; } = true;
+
+    [JsonPropertyName("clipboard")]
+    public List<string> Clipboard { get; set; } = new();
 
     [JsonPropertyName("custom")]
     public DrawerCustomGlass Custom { get; set; } = new();
@@ -198,7 +208,13 @@ public sealed class WidgetDrawerSettings
         Notes ??= new List<DrawerNote>();
         Shortcuts ??= new List<DrawerShortcut>();
         Phrases ??= new List<string>();
+        Clipboard ??= new List<string>();
         Custom ??= new DrawerCustomGlass();
+
+        if (Clipboard.Count > MaxClipboardEntries)
+        {
+            Clipboard.RemoveRange(MaxClipboardEntries, Clipboard.Count - MaxClipboardEntries);
+        }
 
         if (FindGlass(Glass) is null)
         {
@@ -265,6 +281,8 @@ public sealed class WidgetDrawerSettings
         Size = other.Size;
         IdleFade = other.IdleFade;
         AutoHideFullScreen = other.AutoHideFullScreen;
+        ClipboardHistory = other.ClipboardHistory;
+        Clipboard = other.Clipboard;
         Custom = other.Custom;
         Notes = other.Notes;
         Shortcuts = other.Shortcuts;
