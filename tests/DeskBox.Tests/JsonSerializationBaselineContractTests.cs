@@ -49,7 +49,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
             ["src/DeskBox/Services/LocalizationService.cs"] = 1,
             ["src/DeskBox/Services/ManagedStorageMigrationService.cs"] = 2,
             ["src/DeskBox/Services/NativeNotificationActivationEnvelopeStore.cs"] = 2,
-            ["src/DeskBox/Services/QuickCaptureStore.cs"] = 4,
+            ["src/DeskBox/Services/QuickCaptureStore.cs"] = 2,
             // 2: the wipe-recovery offer marker (read deserialize, atomic save serialize).
             ["src/DeskBox/Services/RecoveryOfferStore.cs"] = 2,
             ["src/DeskBox/Services/SearchHistoryService.cs"] = 2,
@@ -73,7 +73,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
             ["src/DeskBox/Services/SyncOutboxStore.cs"] = 2,
             ["src/DeskBox/Services/SyncRevisionsStore.cs"] = 2,
             ["src/DeskBox/Services/SyncStateStore.cs"] = 2,
-            ["src/DeskBox/Services/TodoWidgetStore.cs"] = 5,
+            ["src/DeskBox/Services/TodoWidgetStore.cs"] = 3,
             ["src/DeskBox/Services/WeatherService.cs"] = 5,
             ["src/DeskBox/Services/WidgetFileStackSettings.cs"] = 7,
             ["src/DeskBox/Services/WidgetLayoutStore.cs"] = 2,
@@ -103,7 +103,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
         }
 
         Assert.Equal(45, actual.Count);
-        Assert.Equal(117, actual.Values.Sum());
+        Assert.Equal(113, actual.Values.Sum());
 
         string[] expectedContextOwners =
         [
@@ -261,8 +261,8 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
             // and disk-reload deserializes (batch 3a) + the boot-adoption
             // deserialize and snapshot serialize (batch R8).
             ["SettingsJsonContext.Default.AppSettings"] = 8,
-            ["QuickCaptureJsonContext.Default.StoreData"] = 4,
-            ["TodoJsonContext.Default.StoreData"] = 5,
+            ["QuickCaptureJsonContext.Default.StoreData"] = 2,
+            ["TodoJsonContext.Default.StoreData"] = 3,
             // 8: the seven pre-existing store calls (load/save/update
             // paths) + the settings-host relay serialize (batch R8).
             ["GlancePreferencesJsonContext.Default.Preferences"] = 8,
@@ -280,7 +280,7 @@ public sealed class JsonSerializationBaselineContractTests : IDisposable
                     Regex.Escape(reference) + @"\b").Count);
         }
 
-        Assert.Equal(34, expectedTypeInfoReferences.Values.Sum());
+        Assert.Equal(30, expectedTypeInfoReferences.Values.Sum());
         Assert.DoesNotContain("JsonSerializerOptions", allPhaseTwoSources, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "new JsonStringEnumConverter()",
