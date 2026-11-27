@@ -10,9 +10,8 @@ namespace DeskBox.Services.LayoutSync;
 /// <see cref="WidgetStyleBackupProjection.ShellKeys"/> 一一对应——白名单只有
 /// 一份，这里只负责赋值，不再维护第二张表。
 ///
-/// 一律通过 <c>Settings.WidgetShell.*</c> 切片写入：facade 属性
-/// （<c>Settings.WidgetOpacity</c> 之类）有契约测试按文件计数，新增文件里
-/// 出现一次就会红。解析只用 JsonValue.TryGetValue，不走 JsonSerializer——
+/// 一律通过 <c>Settings</c> 的 WidgetShell 切片写入：facade 透传属性有
+/// 契约测试按文件计数，新增文件里出现一次就会红。解析只用 JsonValue.TryGetValue，不走 JsonSerializer——
 /// Native AOT 下未知类型的序列化会撞 IL2026/IL3050 告警闸门。
 /// </summary>
 internal static class ShellStyleApplier
