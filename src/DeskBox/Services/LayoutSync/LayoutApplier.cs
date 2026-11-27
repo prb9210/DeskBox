@@ -44,8 +44,8 @@ internal static class LayoutApplier
             return result;
         }
 
-        var settings = app.SettingsService.Settings;
-        var widgets = settings.WidgetLayout.Widgets;
+        AppSettings appSettings = app.SettingsService.Settings;
+        var widgets = appSettings.WidgetLayout.Widgets;
         string root = LayoutDocBuilder.Normalize(library);
         IReadOnlyList<WidgetScreenInfo> screens = LayoutDocBuilder.SafeScreens();
         WidgetScreenInfo? screen = screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
@@ -232,8 +232,8 @@ internal static class LayoutApplier
 
             if (order.Count > 0)
             {
-                settings.WidgetShell.WidgetCapsuleBarOrder.Clear();
-                settings.WidgetShell.WidgetCapsuleBarOrder.AddRange(order);
+                appSettings.WidgetShell.WidgetCapsuleBarOrder.Clear();
+                appSettings.WidgetShell.WidgetCapsuleBarOrder.AddRange(order);
                 state.CapsuleSignature = new JsonArray(orderKeys.Select(k => (JsonNode?)k).ToArray()).ToJsonString();
                 state.CapsuleAt = capsuleAt;
                 result.CapsuleApplied = true;

@@ -17,10 +17,10 @@ namespace DeskBox.Services.LayoutSync;
 /// </summary>
 internal static class ShellStyleApplier
 {
-    public static int Apply(AppSettings settings, JsonObject shell)
+    public static int Apply(AppSettings appSettings, JsonObject shell)
     {
         int applied = 0;
-        WidgetShellSettingsSlice s = settings.WidgetShell;
+        WidgetShellSettingsSlice s = appSettings.WidgetShell;
         foreach ((string key, JsonNode? node) in shell)
         {
             switch (key)
