@@ -356,6 +356,45 @@
             </StackPanel>
         </Border>
 
+        <!-- ==================== 本机档案与密钥（重装恢复） ==================== -->
+        <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE7B8;" Style="{StaticResource CompanionCardIconStyle}" />
+                    <TextBlock Text="本机档案与密钥" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap"
+                           Text="把「这台机器是哪台」和 DeepSeek 密钥备份到坚果云，重装系统后输同一个口令就能取回。只备份档案与密钥，不备份资料库里的文件。" />
+
+                <Grid ColumnSpacing="16" RowSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="备份口令" />
+                    <PasswordBox Grid.Row="0" Grid.Column="1" x:Name="ProfilePasswordBox" HorizontalAlignment="Stretch"
+                                 PlaceholderText="自己记牢；丢了只能重填一次密钥" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="同步目录" />
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="ProfileRootBox" HorizontalAlignment="Stretch"
+                             PlaceholderText="留空自动探测坚果云同步目录" />
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="ProfileBackupButton" Click="ProfileBackupButton_Click"
+                            Style="{StaticResource AccentActionButtonStyle}" Content="备份到坚果云" />
+                    <Button x:Name="ProfileRestoreButton" Click="ProfileRestoreButton_Click" Content="从坚果云恢复" />
+                    <TextBlock x:Name="ProfileMessage" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,10">
             <Button x:Name="SaveButton" Click="SaveButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="保存设置" />
             <TextBlock x:Name="SaveMessage" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />

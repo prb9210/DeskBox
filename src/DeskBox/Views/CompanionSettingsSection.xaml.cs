@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using DeskBox.Contracts;
 using DeskBox.Services;
@@ -1197,6 +1198,104 @@ public sealed partial class CompanionSettingsSection : UserControl
         }, "没有冲突副本");
     }
 
+    // ------------------------------------------- 本机档案与密钥（重装恢复）
+
+    private async void ProfileBackupButton_Click(object sender, RoutedEventArgs e) =>
+        await RunProfileActionAsync(backup: true);
+
+    private async void ProfileRestoreButton_Click(object sender, RoutedEventArgs e) =>
+        await RunProfileActionAsync(backup: false);
+
+    /// <summary>备份 / 恢复都只是把口令转给引擎，路径探测、挑档案、解密全在引擎里做，
+    /// 宿主不复制那套逻辑（两处实现迟早会漂移）。</summary>
+    private async Task RunProfileActionAsync(bool backup)
+    {
+        string password = ProfilePasswordBox.Password;
+        if (string.IsNullOrEmpty(password))
+        {
+            ProfileMessage.Text = "先输入备份口令";
+            return;
+        }
+
+        string root = ProfileRootBox.Text.Trim();
+        ProfileBackupButton.IsEnabled = false;
+        ProfileRestoreButton.IsEnabled = false;
+        ProfileMessage.Text = backup ? "正在备份…" : "正在恢复…";
+
+        try
+        {
+            string path = backup ? "/api/profile-backup" : "/api/profile-restore";
+            var payload = new JsonObject
+            {
+                ["root"] = root,
+                ["password"] = password,
+            };
+            if (!backup)
+            {
+                payload["apply"] = true;
+            }
+
+            string body = payload.ToJsonString();
+            (bool ok, string message) = await CompanionClient.PostJsonAsync(path, body);
+            ProfileMessage.Text = DescribeProfileResult(ok, message, backup);
+        }
+        finally
+        {
+            ProfileBackupButton.IsEnabled = true;
+            ProfileRestoreButton.IsEnabled = true;
+        }
+    }
+
+    private static string DescribeProfileResult(bool ok, string body, bool backup)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return ok ? "完成" : "引擎没有回应";
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(body);
+            JsonElement root = doc.RootElement;
+            if (root.TryGetProperty("ok", out JsonElement okElement) && !okElement.GetBoolean())
+            {
+                return root.TryGetProperty("error", out JsonElement err) ? err.GetString() ?? "失败" : "失败";
+            }
+
+            if (backup && root.TryGetProperty("result", out JsonElement result))
+            {
+                string vault = result.TryGetProperty("vaultPath", out JsonElement v) ? v.GetString() ?? "" : "";
+                return vault.Length > 0 ? "已备份到 " + vault : "已备份本机档案";
+            }
+
+            if (!backup)
+            {
+                var parts = new List<string>();
+                if (root.TryGetProperty("machineLabel", out JsonElement label))
+                {
+                    parts.Add("档案 " + (label.GetString() ?? "?"));
+                }
+
+                if (root.TryGetProperty("applied", out JsonElement applied) && applied.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement item in applied.EnumerateArray())
+                    {
+                        parts.Add(item.GetString() ?? "");
+                    }
+                }
+
+                return parts.Count > 0 ? string.Join("；", parts) : "已恢复";
+            }
+
+            return "完成";
+        }
+        catch (JsonException)
+        {
+            return body;
+        }
+    }
+
+    /// <summary>把任意字符串变成 JSON 字面量（口令里可能有引号或反斜杠）。</summary>
     private async void ArchiveConflictsButton_Click(object sender, RoutedEventArgs e)
     {
         await CompanionClient.PostAsync("/api/archive-conflicts");
