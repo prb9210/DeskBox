@@ -25,6 +25,7 @@ internal sealed class LayoutAutoSync
     private int _ticks;
     private string _library = string.Empty;
     private DateTimeOffset _lastPush = DateTimeOffset.MinValue;
+    private DateTimeOffset _libraryAt = DateTimeOffset.MinValue;
 
     private LayoutAutoSync(App app)
     {
@@ -75,6 +76,13 @@ internal sealed class LayoutAutoSync
                 _timer.Interval = TimeSpan.FromSeconds(20);
             }
 
+            // 库路径每 10 分钟重问一次：引擎那边迁移过库 / 换了同步根，这里
+            // 缓存住旧路径会一直往错的地方写。
+            if (_library.Length > 0 && DateTimeOffset.UtcNow - _libraryAt > TimeSpan.FromMinutes(10))
+            {
+                _library = string.Empty;
+            }
+
             if (_library.Length == 0)
             {
                 CompanionStatus status = await CompanionClient.GetStatusAsync();
@@ -84,6 +92,32 @@ internal sealed class LayoutAutoSync
                 }
 
                 _library = status.Library;
+                _libraryAt = DateTimeOffset.UtcNow;
+            }
+
+            // 第一次跑：先拉不推。本机状态是空的，直接推会把出厂默认样式
+            // 盖上现在时间戳，把另一台调好的材质/球外观冲掉。
+            if (_state.IsNew)
+            {
+                JsonElement? seed = await PullAsync();
+                if (seed is JsonElement seedDoc && LayoutDocBuilder.HasContent(seedDoc))
+                {
+                    LayoutApplier.Result seeded =
+                        await LayoutApplier.ApplyAsync(_app, seedDoc, _state, _library);
+                    if (seeded.Rev > _state.RemoteRev)
+                    {
+                        _state.RemoteRev = seeded.Rev;
+                    }
+
+                    _state.IsNew = false;
+                    _state.Save();
+                    App.Log(
+                        $"[LayoutSync] 首次同步以另一台为准：接收 {seeded.Applied} 条、" +
+                        $"新建 {seeded.Created} 个");
+                    return;
+                }
+
+                _state.IsNew = false;
             }
 
             _ticks++;
@@ -137,6 +171,7 @@ internal sealed class LayoutAutoSync
         (bool ok, string body) = await CompanionClient.PutJsonAsync("/api/layout", document.ToJsonString());
         if (!ok)
         {
+            _library = string.Empty; // 下轮重新问一次库路径，可能是引擎重启换了库
             App.Log("[LayoutSync] push failed: " + body);
             return null;
         }

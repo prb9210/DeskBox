@@ -24,6 +24,7 @@ internal static class LayoutApplier
         public bool StyleApplied { get; set; }
         public bool DrawerApplied { get; set; }
         public bool CapsuleApplied { get; set; }
+        public List<string> Touched { get; } = new();
         public long Rev { get; set; }
         public string UpdatedBy { get; set; } = string.Empty;
 
@@ -126,6 +127,7 @@ internal static class LayoutApplier
                         if (config is not null)
                         {
                             result.Created++;
+                            result.Touched.Add(config.Id);
                         }
                     }
                     catch (Exception ex)
@@ -155,6 +157,7 @@ internal static class LayoutApplier
                 };
                 state.DeadKeys.Remove(key);
                 result.Applied++;
+                result.Touched.Add(config.Id);
             }
         }
 
@@ -248,10 +251,12 @@ internal static class LayoutApplier
             await app.SettingsService.SaveAsync();
         }
 
-        // 窗口要重新落位/重绘，否则配置改了界面还停在原地。
-        foreach (WidgetConfig widget in widgets)
+        // 窗口要重新落位/重绘，否则配置改了界面还停在原地。只刷新这次真被
+        // 改动的几个：全部重显会打乱 Z 序、偶尔闪一下（每轮同步都会跑）。
+        foreach (string touchedId in result.Touched)
         {
-            if (!widget.IsVisible)
+            WidgetConfig? widget = widgets.FirstOrDefault(w => w.Id == touchedId);
+            if (widget is null || !widget.IsVisible)
             {
                 continue;
             }

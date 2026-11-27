@@ -34,6 +34,12 @@ internal sealed class LayoutSyncState
 
     public long RemoteRev { get; set; }
 
+    /// <summary>
+    /// 本机第一次跑同步（状态文件还不存在）。这时必须「先拉不推」：否则本机
+    /// 的出厂默认样式会盖上现在时间戳推上去，把另一台调好的样式冲掉。
+    /// </summary>
+    public bool IsNew { get; set; }
+
     private static string StatePath => Path.Combine(
         DeskBoxDataPathService.Current.DataDirectory,
         "layout-sync-state.json");
@@ -45,6 +51,7 @@ internal sealed class LayoutSyncState
         {
             if (!File.Exists(StatePath))
             {
+                state.IsNew = true;
                 return state;
             }
 

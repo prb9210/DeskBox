@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeskBox.Models;
 using Windows.Graphics;
@@ -303,6 +304,40 @@ internal static class LayoutDocBuilder
     /// <summary>应用对端条目后，按本机当前值重新算一次签名并写回状态：
     /// 否则下一轮构建会以为「本地改过了」，把刚收到的时间戳顶掉，
     /// 两台机就会来回推同一条永远停不下来。</summary>
+    /// <summary>
+    /// 对面那份文档到底有没有东西。用来判断「首次同步」要不要以对端为准：
+    /// 只有 widgets / 墓碑 / 样式 / 抽屉 / 胶囊里至少一样非空才算。
+    /// </summary>
+    public static bool HasContent(JsonElement doc)
+    {
+        if (doc.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (string name in new[] { "widgets", "deleted" })
+        {
+            if (doc.TryGetProperty(name, out JsonElement arr) &&
+                arr.ValueKind == JsonValueKind.Array &&
+                arr.GetArrayLength() > 0)
+            {
+                return true;
+            }
+        }
+
+        foreach (string name in new[] { "shellStyle", "drawer" })
+        {
+            if (doc.TryGetProperty(name, out JsonElement obj) &&
+                obj.ValueKind == JsonValueKind.Object &&
+                obj.EnumerateObject().Any())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static string ComputeSignature(
         App app,
         WidgetConfig widget,
