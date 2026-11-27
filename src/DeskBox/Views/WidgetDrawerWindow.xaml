@@ -12,6 +12,9 @@
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
+        AllowDrop="True"
+        DragOver="RootGrid_DragOver"
+        Drop="RootGrid_Drop"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited"
         PointerMoved="RootGrid_PointerMoved"
@@ -38,9 +41,25 @@
                  invisible ring on top of the window backdrop. -->
             <Ellipse x:Name="Ball" Width="56" Height="56" IsHitTestVisible="False">
                 <Ellipse.Fill>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Offset="0" Color="#FF3B82F6" />
-                        <GradientStop Offset="1" Color="#FF1D4ED8" />
+                    <LinearGradientBrush StartPoint="0.25,0.05" EndPoint="0.75,0.95">
+                        <GradientStop Offset="0" Color="#FF3A3F45" />
+                        <GradientStop Offset="1" Color="#FF20242A" />
+                    </LinearGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <!-- 玻璃高光：球顶部一层白到透明的渐变，强度由玻璃主题控制。 -->
+            <Ellipse
+                x:Name="BallHighlight"
+                Width="56"
+                Height="56"
+                IsHitTestVisible="False"
+                Opacity="0.12">
+                <Ellipse.Fill>
+                    <LinearGradientBrush StartPoint="0.18,0.02" EndPoint="0.62,0.92">
+                        <GradientStop Offset="0" Color="#D9FFFFFF" />
+                        <GradientStop Offset="0.42" Color="#33FFFFFF" />
+                        <GradientStop Offset="1" Color="#00FFFFFF" />
                     </LinearGradientBrush>
                 </Ellipse.Fill>
             </Ellipse>
@@ -62,6 +81,28 @@
                 Stroke="#33000000"
                 StrokeThickness="1"
                 Visibility="Collapsed" />
+
+            <!-- 待归类 / 暂存 / 备忘角标。放在球内右上角，避免被窗口裁圆切掉。 -->
+            <Border
+                x:Name="Badge"
+                Width="19"
+                Height="19"
+                CornerRadius="9.5"
+                Background="#E5484D"
+                BorderBrush="#CCFFFFFF"
+                BorderThickness="1"
+                Visibility="Collapsed"
+                IsHitTestVisible="False">
+                <TextBlock
+                    x:Name="BadgeText"
+                    FontFamily="Microsoft YaHei UI"
+                    FontSize="10"
+                    FontWeight="Bold"
+                    Foreground="White"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Text="0" />
+            </Border>
         </Canvas>
     </Grid>
 </Window>

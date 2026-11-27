@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -6,6 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace DeskBox.Services;
+
+/// <summary>一条最近的整理记录（引擎 /api/status 的 recent[]）。</summary>
+public sealed record CompanionRecentMove(string Name, string From, string To, string Reason, string At);
 
 /// <summary>One decoded snapshot of the organizer engine's status endpoint.</summary>
 public sealed class CompanionStatus
@@ -17,6 +22,9 @@ public sealed class CompanionStatus
     public string LastScan { get; init; } = string.Empty;
     public string LastApply { get; init; } = string.Empty;
     public int LastApplyCount { get; init; }
+    public int PendingCount { get; init; }
+    public IReadOnlyList<CompanionRecentMove> Recent { get; init; } = Array.Empty<CompanionRecentMove>();
+
     public string LastSync { get; init; } = string.Empty;
     public string LastSyncError { get; init; } = string.Empty;
     public string LastError { get; init; } = string.Empty;
@@ -69,6 +77,8 @@ public static class CompanionClient
                 LastScan = FormatTime(GetString(root, "last_scan")),
                 LastApply = FormatTime(GetString(root, "last_apply")),
                 LastApplyCount = (int)GetNumber(root, "last_apply_count"),
+                PendingCount = (int)GetNumber(root, "pending_count"),
+                Recent = ParseRecent(root),
                 LastSync = FormatTime(GetString(root, "last_sync")),
                 LastSyncError = GetString(root, "last_sync_error"),
                 LastError = GetString(root, "last_error"),
@@ -187,6 +197,40 @@ public static class CompanionClient
         {
             return (false, "连不上管家引擎：" + ex.Message);
         }
+    }
+
+    /// <summary>recent[] → 悬浮球「最近整理」菜单用的前 8 条。</summary>
+    private static IReadOnlyList<CompanionRecentMove> ParseRecent(JsonElement root)
+    {
+        var list = new List<CompanionRecentMove>();
+        if (!root.TryGetProperty("recent", out JsonElement array) || array.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+
+        foreach (JsonElement item in array.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            string from = GetString(item, "from");
+            string to = GetString(item, "to");
+            string name = string.IsNullOrEmpty(from) ? to : Path.GetFileName(from);
+            if (string.IsNullOrEmpty(name))
+            {
+                name = to;
+            }
+
+            list.Add(new CompanionRecentMove(name, from, to, GetString(item, "reason"), FormatTime(GetString(item, "at"))));
+            if (list.Count >= 8)
+            {
+                break;
+            }
+        }
+
+        return list;
     }
 
     private static string GetString(JsonElement root, string name) =>

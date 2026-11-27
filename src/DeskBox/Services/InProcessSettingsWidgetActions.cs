@@ -632,4 +632,24 @@ public sealed class InProcessSettingsWidgetActions : ISettingsWidgetActions
             () => LayoutSyncService.PullAsync(app, libraryFolder));
         return new LayoutTransferResult(result.Ok, result.Message);
     }
+
+    public Task<DrawerSettingsApplyResult> ReloadDrawerSettingsAsync()
+    {
+        if (Application.Current is not App app)
+        {
+            return Task.FromResult(new DrawerSettingsApplyResult(
+                false, false, string.Empty, string.Empty, "主程序不可用"));
+        }
+
+        return DeskBox.Platform.UiDispatch.RunAsync(() =>
+        {
+            app.ReloadDrawerSettingsFromDisk();
+            return Task.FromResult(new DrawerSettingsApplyResult(
+                true,
+                app.DrawerSettings.Visible,
+                app.DrawerSettings.Shape,
+                app.DrawerSettings.Glass,
+                "已应用"));
+        });
+    }
 }

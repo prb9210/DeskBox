@@ -37,6 +37,7 @@ public sealed partial class CompanionSettingsSection : UserControl
 
         Loaded += async (_, _) =>
         {
+            LoadDrawerSettings();
             RefreshUpdateUi();
             await RefreshStatusAsync();
             await LoadCategoriesAsync();
@@ -720,6 +721,244 @@ public sealed partial class CompanionSettingsSection : UserControl
     {
         _widgetActions = widgetActions;
         OwnerHandle = ownerHandle;
+    }
+
+    // ------------------------------------------------------------- 悬浮球
+
+    private WidgetDrawerSettings? _drawerDraft;
+    private bool _drawerLoading;
+
+    /// <summary>
+    /// 悬浮球卡片：读的是主进程写的 drawer.json；每次改动写盘后经 IPC 让主进程
+    /// 重载并重建球（设置进程没有 WidgetDrawerSettings 实例，只写文件不生效）。
+    /// </summary>
+    private void LoadDrawerSettings()
+    {
+        _drawerLoading = true;
+        try
+        {
+            _drawerDraft = WidgetDrawerSettings.Load();
+
+            DrawerShapeBox.Items.Clear();
+            int shapeIndex = 0;
+            for (int i = 0; i < WidgetDrawerSettings.Shapes.Count; i++)
+            {
+                DrawerShapeBox.Items.Add(WidgetDrawerSettings.Shapes[i].Name);
+                if (string.Equals(WidgetDrawerSettings.Shapes[i].Id, _drawerDraft.Shape, StringComparison.OrdinalIgnoreCase))
+                {
+                    shapeIndex = i;
+                }
+            }
+
+            DrawerShapeBox.SelectedIndex = shapeIndex;
+
+            DrawerGlassBox.Items.Clear();
+            int glassIndex = 0;
+            for (int i = 0; i < WidgetDrawerSettings.Glasses.Count; i++)
+            {
+                DrawerGlassBox.Items.Add(WidgetDrawerSettings.Glasses[i].Name);
+                if (string.Equals(WidgetDrawerSettings.Glasses[i].Id, _drawerDraft.Glass, StringComparison.OrdinalIgnoreCase))
+                {
+                    glassIndex = i;
+                }
+            }
+
+            DrawerGlassBox.SelectedIndex = glassIndex;
+
+            DrawerVisibleCheck.IsChecked = _drawerDraft.Visible;
+            DrawerIdleFadeCheck.IsChecked = _drawerDraft.IdleFade;
+            DrawerFullScreenCheck.IsChecked = _drawerDraft.AutoHideFullScreen;
+            DrawerFillBox.Text = _drawerDraft.Custom.Fill;
+            DrawerOpacitySlider.Value = Math.Clamp(_drawerDraft.Custom.Opacity * 100, 25, 100);
+            DrawerHighlightSlider.Value = Math.Clamp(_drawerDraft.Custom.Highlight * 100, 0, 60);
+            DrawerRimSlider.Value = Math.Clamp(_drawerDraft.Custom.Rim * 100, 0, 100);
+
+            var shortcutLines = new List<string>();
+            foreach (DrawerShortcut shortcut in _drawerDraft.Shortcuts)
+            {
+                shortcutLines.Add(shortcut.Name + "|" + shortcut.Target);
+            }
+
+            DrawerShortcutsBox.Text = string.Join(Environment.NewLine, shortcutLines);
+            DrawerPhrasesBox.Text = string.Join(Environment.NewLine, _drawerDraft.Phrases);
+            DrawerCustomPanel.Visibility = _drawerDraft.Glass == "custom"
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            UpdateDrawerSliderLabels();
+            DrawerMessage.Text = _drawerDraft.Visible ? "当前：显示中" : "当前：已隐藏";
+        }
+        catch (Exception ex)
+        {
+            DrawerMessage.Text = "读取悬浮球设置失败：" + ex.Message;
+        }
+        finally
+        {
+            _drawerLoading = false;
+        }
+    }
+
+    private void UpdateDrawerSliderLabels()
+    {
+        DrawerOpacityValue.Text = (int)Math.Round(DrawerOpacitySlider.Value) + "%";
+        DrawerHighlightValue.Text = (int)Math.Round(DrawerHighlightSlider.Value) + "%";
+        DrawerRimValue.Text = (int)Math.Round(DrawerRimSlider.Value) + "%";
+    }
+
+    private void DrawerCheck_Changed(object sender, RoutedEventArgs e) =>
+        _ = ApplyDrawerSettingsAsync();
+
+    private void DrawerCombo_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_drawerLoading || _drawerDraft is null)
+        {
+            return;
+        }
+
+        DrawerCustomPanel.Visibility = DrawerGlassBox.SelectedIndex >= 0 &&
+                                       string.Equals(
+                                           WidgetDrawerSettings.Glasses[DrawerGlassBox.SelectedIndex].Id,
+                                           "custom",
+                                           StringComparison.OrdinalIgnoreCase)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _ = ApplyDrawerSettingsAsync();
+    }
+
+    private void DrawerText_LostFocus(object sender, RoutedEventArgs e) =>
+        _ = ApplyDrawerSettingsAsync();
+
+    private async void DrawerApplyButton_Click(object sender, RoutedEventArgs e) =>
+        await ApplyDrawerSettingsAsync();
+
+    private async Task ApplyDrawerSettingsAsync()
+    {
+        if (_drawerLoading || _drawerDraft is null)
+        {
+            return;
+        }
+
+        try
+        {
+            UpdateDrawerSliderLabels();
+
+            _drawerDraft.Visible = DrawerVisibleCheck.IsChecked == true;
+            _drawerDraft.IdleFade = DrawerIdleFadeCheck.IsChecked == true;
+            _drawerDraft.AutoHideFullScreen = DrawerFullScreenCheck.IsChecked == true;
+
+            int shapeIndex = Math.Clamp(DrawerShapeBox.SelectedIndex, 0, WidgetDrawerSettings.Shapes.Count - 1);
+            _drawerDraft.Shape = WidgetDrawerSettings.Shapes[shapeIndex].Id;
+
+            int glassIndex = Math.Clamp(DrawerGlassBox.SelectedIndex, 0, WidgetDrawerSettings.Glasses.Count - 1);
+            _drawerDraft.Glass = WidgetDrawerSettings.Glasses[glassIndex].Id;
+
+            _drawerDraft.Custom = new DrawerCustomGlass
+            {
+                Fill = string.IsNullOrWhiteSpace(DrawerFillBox.Text) ? "#202020" : DrawerFillBox.Text.Trim(),
+                Opacity = DrawerOpacitySlider.Value / 100.0,
+                Highlight = DrawerHighlightSlider.Value / 100.0,
+                Rim = DrawerRimSlider.Value / 100.0
+            };
+
+            _drawerDraft.Shortcuts = ParseShortcutLines(DrawerShortcutsBox.Text);
+            _drawerDraft.Phrases = SplitLines(DrawerPhrasesBox.Text);
+            _drawerDraft.Save();
+
+            if (_widgetActions is null)
+            {
+                DrawerMessage.Text = "设置已保存；主程序不在，重启后生效。";
+                return;
+            }
+
+            DrawerSettingsApplyResult result = await _widgetActions.ReloadDrawerSettingsAsync();
+            DrawerMessage.Text = result.Applied
+                ? "已应用：" + (result.Visible ? "显示中" : "已隐藏") +
+                  "｜" + ShapeName(result.Shape) + "｜" + GlassName(result.Glass)
+                : "应用失败：" + result.Message;
+        }
+        catch (Exception ex)
+        {
+            DrawerMessage.Text = "保存失败：" + ex.Message;
+        }
+    }
+
+    private static string ShapeName(string id)
+    {
+        foreach ((string shapeId, string name) in WidgetDrawerSettings.Shapes)
+        {
+            if (string.Equals(shapeId, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return name;
+            }
+        }
+
+        return id;
+    }
+
+    private static string GlassName(string id)
+    {
+        foreach (DrawerGlassPreset preset in WidgetDrawerSettings.Glasses)
+        {
+            if (string.Equals(preset.Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return preset.Name;
+            }
+        }
+
+        return id;
+    }
+
+    private static List<string> SplitLines(string text)
+    {
+        var lines = new List<string>();
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length > 0)
+            {
+                lines.Add(line);
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>每行「名称|目标」；没有竖线时把整行当目标，名称取末段。</summary>
+    private static List<DrawerShortcut> ParseShortcutLines(string text)
+    {
+        var list = new List<DrawerShortcut>();
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            int bar = line.IndexOf('|');
+            string name;
+            string target;
+            if (bar > 0)
+            {
+                name = line.Substring(0, bar).Trim();
+                target = line.Substring(bar + 1).Trim();
+            }
+            else
+            {
+                target = line;
+                name = Path.GetFileName(line.TrimEnd('\\', '/'));
+                if (string.IsNullOrEmpty(name))
+                {
+                    name = line;
+                }
+            }
+
+            if (target.Length > 0)
+            {
+                list.Add(new DrawerShortcut { Name = name, Target = target });
+            }
+        }
+
+        return list;
     }
 
     /// <summary>共享库路径：输入框 → 引擎状态 → 引擎 config.json。</summary>

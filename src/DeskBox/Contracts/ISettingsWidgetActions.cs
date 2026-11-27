@@ -206,7 +206,23 @@ public interface ISettingsWidgetActions
 
     /// <summary>Applies the other machine's logical layout (same step 1 model).</summary>
     Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder);
+
+    /// <summary>
+    /// 设置页改了 drawer.json 之后调用：主进程重载设置、重建悬浮球外观并同步
+    /// 显示状态。设置进程不持有 WidgetDrawerSettings 实例，直接写文件不会
+    /// 让主进程内存里的那份跟着变，所以这一步必须过 IPC。
+    /// </summary>
+    Task<DrawerSettingsApplyResult> ReloadDrawerSettingsAsync();
 }
+
+/// <summary>悬浮球设置应用结果（回给设置页显示）。</summary>
+public sealed record DrawerSettingsApplyResult(
+    bool Applied,
+    bool Visible,
+    string Shape,
+    string Glass,
+    string Message);
+
 
 /// <summary>Per-folder outcome of a companion "按分类生成格子" batch.</summary>
 public sealed record FolderWidgetCreateResult(string FolderPath, bool Created, string? Error = null);

@@ -62,13 +62,13 @@ public partial class App
 
         var drawerItem = new MenuFlyoutItem
         {
-            Text = "格子抽屉（悬浮球）",
+            Text = DrawerSettings.Visible ? "隐藏悬浮球" : "显示悬浮球",
             Width = TrayMenuItemWidth,
-            Icon = new FontIcon { Glyph = "\uE700" }
+            Icon = new FontIcon { Glyph = DrawerSettings.Visible ? "\uE7B3" : "\uE7B8" }
         };
         AttachTrayMenuItemInteraction(
             drawerItem,
-            () => RunTraySettingsActionAsync(contextMenu, ShowWidgetDrawer));
+            () => RunTraySettingsActionAsync(contextMenu, ToggleWidgetDrawerVisibility));
 
         var hideAllWidgetsItem = new MenuFlyoutItem
         {

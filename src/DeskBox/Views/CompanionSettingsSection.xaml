@@ -74,6 +74,124 @@
             </StackPanel>
         </Border>
 
+        <!-- ============================ 悬浮球 ============================ -->
+        <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE7B8;" Style="{StaticResource CompanionCardIconStyle}" />
+                    <TextBlock Text="悬浮球" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
+                           Text="玻璃主题与格子同材质；可换形态、可整体隐藏（托盘和 Ctrl+Alt+Space 都能找回）。" />
+
+                <Grid ColumnSpacing="16" RowSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="显示" />
+                    <CheckBox Grid.Row="0" Grid.Column="1" x:Name="DrawerVisibleCheck"
+                              Content="在桌面上显示悬浮球"
+                              Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="形态" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" x:Name="DrawerShapeBox" Width="220"
+                              HorizontalAlignment="Left" SelectionChanged="DrawerCombo_Changed" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="玻璃主题" />
+                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="DrawerGlassBox" Width="220"
+                              HorizontalAlignment="Left" SelectionChanged="DrawerCombo_Changed" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="闲置" />
+                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="18">
+                        <CheckBox x:Name="DrawerIdleFadeCheck" Content="8 秒后自动淡出"
+                                  Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
+                        <CheckBox x:Name="DrawerFullScreenCheck" Content="全屏时自动隐藏"
+                                  Checked="DrawerCheck_Changed" Unchecked="DrawerCheck_Changed" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="我的常用" />
+                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="DrawerShortcutsBox"
+                             AcceptsReturn="True" Height="86" TextWrapping="Wrap"
+                             PlaceholderText="每行一个：名称|路径（目录、文件或网址）"
+                             LostFocus="DrawerText_LostFocus" />
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="常用短语" />
+                    <TextBox Grid.Row="5" Grid.Column="1" x:Name="DrawerPhrasesBox"
+                             AcceptsReturn="True" Height="66" TextWrapping="Wrap"
+                             PlaceholderText="每行一条；右键「常用短语」点一下复制"
+                             LostFocus="DrawerText_LostFocus" />
+                </Grid>
+
+                <StackPanel x:Name="DrawerCustomPanel" Spacing="6" Visibility="Collapsed">
+                    <Grid ColumnSpacing="16" RowSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="{StaticResource CompanionLabelWidth}" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"
+                                   Style="{StaticResource SettingDescriptionTextStyle}" Text="底色" />
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DrawerFillBox" Width="120"
+                                 HorizontalAlignment="Left" PlaceholderText="#202020"
+                                 LostFocus="DrawerText_LostFocus" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"
+                                   Style="{StaticResource SettingDescriptionTextStyle}" Text="不透明度" />
+                        <Slider Grid.Row="1" Grid.Column="1" x:Name="DrawerOpacitySlider"
+                                Minimum="25" Maximum="100" StepFrequency="1"
+                                LostFocus="DrawerText_LostFocus" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" x:Name="DrawerOpacityValue"
+                                   VerticalAlignment="Center" Style="{StaticResource SettingValueTextStyle}" Text="80%" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
+                                   Style="{StaticResource SettingDescriptionTextStyle}" Text="高光" />
+                        <Slider Grid.Row="2" Grid.Column="1" x:Name="DrawerHighlightSlider"
+                                Minimum="0" Maximum="60" StepFrequency="1"
+                                LostFocus="DrawerText_LostFocus" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" x:Name="DrawerHighlightValue"
+                                   VerticalAlignment="Center" Style="{StaticResource SettingValueTextStyle}" Text="12%" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"
+                                   Style="{StaticResource SettingDescriptionTextStyle}" Text="描边" />
+                        <Slider Grid.Row="3" Grid.Column="1" x:Name="DrawerRimSlider"
+                                Minimum="0" Maximum="100" StepFrequency="1"
+                                LostFocus="DrawerText_LostFocus" />
+                        <TextBlock Grid.Row="3" Grid.Column="2" x:Name="DrawerRimValue"
+                                   VerticalAlignment="Center" Style="{StaticResource SettingValueTextStyle}" Text="35%" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="DrawerApplyButton" Content="应用设置" Click="DrawerApplyButton_Click" />
+                    <TextBlock x:Name="DrawerMessage" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" Text="" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- 更新入口统一放在「关于 → 升级通道」，这里只留一个隐藏占位，
              等自动更新接好后再彻底删除（避免两个地方各有一套更新按钮）。 -->
         <Border Visibility="Collapsed" Style="{StaticResource SettingsGroupStyle}" Padding="16,12">

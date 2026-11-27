@@ -430,6 +430,12 @@ public sealed class SettingsIpcMethodRouter
                     await _widget.PullLayoutAsync(payload ?? string.Empty),
                     SettingsIpcJsonContext.Default.LayoutTransferResult), null);
 
+            case SettingsIpcMethods.CompanionDrawerReload:
+                if (_widget is null) return unavailable(method);
+                return (true, SettingsIpcPayload.Encode(
+                    await _widget.ReloadDrawerSettingsAsync(),
+                    SettingsIpcJsonContext.Default.DrawerSettingsApplyResult), null);
+
             case SettingsIpcMethods.WidgetSyncFeatureEnabled:
                 if (_widget is null) return unavailable(method);
                 SettingsIpcKindArg sync = DecodeKindArg(payload);

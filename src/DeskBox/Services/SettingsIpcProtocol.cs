@@ -293,6 +293,12 @@ public static class SettingsIpcMethods
     /// into the right-edge capsule rail.
     /// </summary>
     public const string CompanionResetCategoryWidgets = "companion.reset-category-widgets";
+
+    /// <summary>
+    /// 悬浮球设置重载：payload = 无；response = DrawerSettingsApplyResult。
+    /// 设置进程写完 drawer.json 后调用，主进程重载并重建球的形态/玻璃。
+    /// </summary>
+    public const string CompanionDrawerReload = "companion.drawer-reload";
 }
 
 /// <summary>
@@ -453,6 +459,7 @@ public static class SettingsIpcPayload
 [JsonSerializable(typeof(List<FolderWidgetCreateResult>))]
 [JsonSerializable(typeof(SettingsIpcCompanionReset))]
 [JsonSerializable(typeof(CompanionWidgetResetResult))]
+[JsonSerializable(typeof(DrawerSettingsApplyResult))]
 [JsonSerializable(typeof(LayoutTransferResult))]
 [JsonSerializable(typeof(AppRelaunchScheduleResult))]
 [JsonSerializable(typeof(AppRuntimeHealthSnapshot))]

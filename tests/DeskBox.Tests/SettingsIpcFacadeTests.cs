@@ -691,6 +691,9 @@ public sealed class SettingsIpcFacadeTests : IDisposable
 
         public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
             Task.FromResult(new LayoutTransferResult(true, "pulled"));
+
+        public Task<DrawerSettingsApplyResult> ReloadDrawerSettingsAsync() =>
+            Task.FromResult(new DrawerSettingsApplyResult(true, true, "ball", "smoke", "applied"));
     }
 
     private sealed class FakeAppActions : ISettingsAppActions

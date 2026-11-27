@@ -13,6 +13,12 @@ public static partial class Win32Helper
     [DllImport("gdi32.dll", SetLastError = true)]
     public static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
 
+    /// <summary>贴边条形态的窗口区域：圆角胶囊，不能再用椭圆（竖条会被裁成尖头）。</summary>
+    [DllImport("gdi32.dll", SetLastError = true)]
+    public static extern IntPtr CreateRoundRectRgn(
+        int left, int top, int right, int bottom, int widthEllipse, int heightEllipse);
+
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int SetWindowRgn(
         IntPtr hWnd,

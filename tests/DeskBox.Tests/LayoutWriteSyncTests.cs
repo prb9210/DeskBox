@@ -210,6 +210,8 @@ public sealed class LayoutWriteSyncTests : IDisposable
             Task.FromResult(new LayoutTransferResult(true, "pushed"));
         public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
             Task.FromResult(new LayoutTransferResult(true, "pulled"));
+        public Task<DrawerSettingsApplyResult> ReloadDrawerSettingsAsync() =>
+            Task.FromResult(new DrawerSettingsApplyResult(true, true, "ball", "smoke", "applied"));
     }
 
     public void Dispose()

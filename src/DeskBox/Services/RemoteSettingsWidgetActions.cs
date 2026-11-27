@@ -538,6 +538,27 @@ public sealed class RemoteSettingsWidgetActions : ISettingsWidgetActions
     public Task<LayoutTransferResult> PullLayoutAsync(string libraryFolder) =>
         RequestLayoutTransferAsync(SettingsIpcMethods.CompanionLayoutPull, libraryFolder);
 
+    public async Task<DrawerSettingsApplyResult> ReloadDrawerSettingsAsync()
+    {
+        try
+        {
+            (bool ok, string? payload, string? error) = await _client.RequestAsync(
+                SettingsIpcMethods.CompanionDrawerReload);
+            if (ok &&
+                SettingsIpcPayload.Decode(payload, SettingsIpcJsonContext.Default.DrawerSettingsApplyResult)
+                    is { } result)
+            {
+                return result;
+            }
+
+            return new DrawerSettingsApplyResult(false, false, string.Empty, string.Empty, error ?? "主程序没有回应");
+        }
+        catch (Exception ex)
+        {
+            return new DrawerSettingsApplyResult(false, false, string.Empty, string.Empty, "应用悬浮球设置失败：" + ex.Message);
+        }
+    }
+
     private async Task<LayoutTransferResult> RequestLayoutTransferAsync(
         string method,
         string libraryFolder)

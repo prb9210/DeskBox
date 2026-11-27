@@ -5,6 +5,7 @@ using DeskBox.Helpers;
 using DeskBox.Platform;
 using DeskBox.Services;
 using Microsoft.UI;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,7 +13,9 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.Storage;
 using Windows.UI;
 using WinRT.Interop;
 using XamlPath = Microsoft.UI.Xaml.Shapes.Path;
@@ -27,11 +30,15 @@ namespace DeskBox.Views;
 /// the window's real client area, and the ring radius is derived from that same
 /// area, so DPI scaling can never push the ball out of the frame (which is what
 /// made earlier builds show an empty rectangle).
+///
+/// 1.6.0: the ball is a glass bead that follows the widget material instead of
+/// a saturated solid circle, supports five collapsed shapes, can be hidden
+/// entirely, carries a badge, accepts dropped files as "staging", and offers a
+/// full action menu (search / organize / notes / shortcuts / screenshots /
+/// countdown).
 /// </summary>
 public sealed partial class WidgetDrawerWindow : Window
 {
-    private const double BallDiameter = 56;
-    private const double ClosedSize = 64;
     private const double WindowPadding = 14;
 
     // 扇形几何与窗口尺寸解耦（照 ClassFlow 的 RadialMenu：半径是常量、
@@ -53,11 +60,21 @@ public sealed partial class WidgetDrawerWindow : Window
     /// <summary>Press started on the bead while the ring is open. Release
     /// without movement collapses the ring; movement drags the whole ring.</summary>
     private bool _centerPressWhileExpanded;
-    private double _layoutDiameterDip = ClosedSize;
+    private double _layoutDiameterDip;
     private bool _dragging;
     private Windows.Foundation.Point _pressPoint;
     private PointInt32 _pressWindowOrigin;
     private double _scale = 1.0;
+
+    // 1.6.0: the collapsed geometry is per-shape instead of two constants.
+    private double _ballW = WidgetDrawerSettings.DefaultBallDiameter;
+    private double _ballH = WidgetDrawerSettings.DefaultBallDiameter;
+    private double _closedSize = WidgetDrawerSettings.DefaultBallDiameter + 8;
+
+    private DispatcherQueueTimer? _idleTimer;
+    private DispatcherQueueTimer? _badgeTimer;
+    private DispatcherQueueTimer? _flashTimer;
+    private bool _badgeBusy;
 
     /// <summary>收起态球心（屏幕像素）。展开时如果为了让整圈扇片可见而把窗口
     /// 推进了屏幕内，收起就按这个中心放回去，球不会越点越往中间跑。</summary>
@@ -65,8 +82,8 @@ public sealed partial class WidgetDrawerWindow : Window
     private bool _sizeEnforcing;
 
     // Recomputed每一次 from the actual client size.
-    private double _centerX = ClosedSize / 2;
-    private double _centerY = ClosedSize / 2;
+    private double _centerX = 32;
+    private double _centerY = 32;
     private double _fanInner = 44;
     private double _fanOuter = FanOuter;
 
@@ -75,6 +92,8 @@ public sealed partial class WidgetDrawerWindow : Window
         _settings = settings;
         InitializeComponent();
         Title = "格子抽屉";
+
+        ApplyShape();
 
         try
         {
@@ -103,6 +122,7 @@ public sealed partial class WidgetDrawerWindow : Window
         RootGrid.Loaded += (_, _) =>
         {
             UpdateStateDot();
+            UpdateTooltip();
 
             // XamlRoot 只有 Loaded 之后才有 RasterizationScale。构造时读到的
             // 永远是 1.0，于是在 150%/200% 缩放的机器上会按 64 像素建窗，
@@ -112,6 +132,8 @@ public sealed partial class WidgetDrawerWindow : Window
             EnsureWindowPixels();
             Relayout();
             ApplyWindowClip();
+            StartBadgeTimer();
+            _ = RefreshBadgeAsync();
         };
 
         RootGrid.SizeChanged += (_, _) =>
@@ -150,6 +172,58 @@ public sealed partial class WidgetDrawerWindow : Window
         return AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hWnd));
     }
 
+    // ------------------------------------------------------------------ shape
+
+    /// <summary>形态只影响「收起」时的球和窗口：展开永远是固定的 292 DIP 圆环。</summary>
+    private void ApplyShape()
+    {
+        switch ((_settings.Shape ?? "ball").ToLowerInvariant())
+        {
+            case "large":
+                _ballW = 64;
+                _ballH = 64;
+                break;
+            case "small":
+                _ballW = 44;
+                _ballH = 44;
+                break;
+            case "dot":
+                _ballW = 36;
+                _ballH = 36;
+                break;
+            case "strip":
+                // 竖向胶囊：贴屏幕边时像一条玻璃边，点开仍是完整圆环。
+                _ballW = 18;
+                _ballH = 52;
+                break;
+            default:
+                double size = Math.Clamp(_settings.Size, 28, 96);
+                _ballW = size;
+                _ballH = size;
+                break;
+        }
+
+        _closedSize = Math.Max(_ballW, _ballH) + 8;
+        _layoutDiameterDip = _closedSize;
+
+        Ball.Width = _ballW;
+        Ball.Height = _ballH;
+        BallHighlight.Width = _ballW;
+        BallHighlight.Height = _ballH;
+        BallRing.Width = _ballW + 4;
+        BallRing.Height = _ballH + 4;
+        BallGlyph.FontSize = Math.Clamp(Math.Min(_ballW, _ballH) * 0.30, 10, 22);
+
+        double badge = Math.Clamp(Math.Min(_ballW, _ballH) * 0.34, 14, 20);
+        Badge.Width = badge;
+        Badge.Height = badge;
+        Badge.CornerRadius = new CornerRadius(badge / 2);
+        BadgeText.FontSize = badge < 17 ? 9 : 10;
+    }
+
+    private bool IsStripShape() =>
+        string.Equals(_settings.Shape, "strip", StringComparison.OrdinalIgnoreCase);
+
     // ------------------------------------------------------------------ chrome
 
     private void ApplyChrome()
@@ -177,6 +251,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
             int noBorder = -2; // DWMWA_COLOR_NONE
             Win32Helper.TrySetDwmWindowAttribute(hWnd, Win32Helper.DWMWA_BORDER_COLOR, ref noBorder);
+
             int doNotRound = 1; // DWMWCP_DONOTROUND
             Win32Helper.TrySetDwmWindowAttribute(hWnd, Win32Helper.DWMWA_WINDOW_CORNER_PREFERENCE, ref doNotRound);
         }
@@ -200,8 +275,8 @@ public sealed partial class WidgetDrawerWindow : Window
     }
 
     /// <summary>
-    /// 窗口永远裁成圆：收起是内切圆（球 56 &lt; 窗口 64，构造上切不到球），
-    /// 展开是「扇形外径 + 1.5 DIP」的圆。
+    /// 窗口裁切：收起是球的形状（普通球=内切圆；贴边条=圆角胶囊），展开是
+    /// 「扇形外径 + 1.5 DIP」的圆。
     ///
     /// 早前「展开一律不裁」是为了避免把扇片切成斜条；那条约束来自用
     /// DIP×_scale 或屏幕边缘距离去算半径。现在半径只由窗口真实像素决定
@@ -229,6 +304,21 @@ public sealed partial class WidgetDrawerWindow : Window
                 return;
             }
 
+            int cx = w / 2;
+            int cy = h / 2;
+
+            if (!_expanded && IsStripShape())
+            {
+                int rw = Math.Max(4, (int)Math.Round(_ballW * _scale));
+                int rh = Math.Max(8, (int)Math.Round(_ballH * _scale));
+                int corner = Math.Max(2, (int)Math.Round(9 * _scale)) * 2;
+                IntPtr pill = Win32Helper.CreateRoundRectRgn(
+                    cx - (rw / 2), cy - (rh / 2), cx + (rw / 2) + 1, cy + (rh / 2) + 1, corner, corner);
+                bool pillOk = Win32Helper.SetWindowRgn(hWnd, pill, true) != 0;
+                App.Log($"[Drawer] clip pill {rw}x{rh} win={w}x{h} scale={_scale:0.##} ok={pillOk}");
+                return;
+            }
+
             int radius = inscribed;
             if (_expanded)
             {
@@ -240,8 +330,6 @@ public sealed partial class WidgetDrawerWindow : Window
                 }
             }
 
-            int cx = w / 2;
-            int cy = h / 2;
             IntPtr region = Win32Helper.CreateEllipticRgn(cx - radius, cy - radius, cx + radius, cy + radius);
             bool ok = Win32Helper.SetWindowRgn(hWnd, region, true) != 0;
             App.Log($"[Drawer] clip d={radius * 2} win={w}x{h} expanded={_expanded} scale={_scale:0.##} ok={ok}");
@@ -294,7 +382,7 @@ public sealed partial class WidgetDrawerWindow : Window
                 }
             }
 
-            double dip = _expanded ? _layoutDiameterDip : ClosedSize;
+            double dip = _expanded ? _layoutDiameterDip : _closedSize;
             int want = (int)Math.Round(dip * _scale);
             if (want < 8 || (size.Width == want && size.Height == want))
             {
@@ -330,7 +418,7 @@ public sealed partial class WidgetDrawerWindow : Window
         // 不能用 ActualWidth：SetExpanded 里 Resize 之后马上布局，框架还没测量，
         // 读到的是旧尺寸（曾把环缩成球内的小圈，表现成“点了没反应”）。
         // 目标尺寸只认 _layoutDiameterDip。
-        double windowSide = _layoutDiameterDip > 0 ? _layoutDiameterDip : ClosedSize;
+        double windowSide = _layoutDiameterDip > 0 ? _layoutDiameterDip : _closedSize;
         double ballCx = windowSide / 2;
         double ballCy = windowSide / 2;
 
@@ -345,8 +433,10 @@ public sealed partial class WidgetDrawerWindow : Window
         FanCanvas.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
         FanCanvas.RenderTransform = new ScaleTransform { ScaleX = fanScale, ScaleY = fanScale };
 
-        Canvas.SetLeft(Ball, ballCx - (BallDiameter / 2));
-        Canvas.SetTop(Ball, ballCy - (BallDiameter / 2));
+        Canvas.SetLeft(Ball, ballCx - (_ballW / 2));
+        Canvas.SetTop(Ball, ballCy - (_ballH / 2));
+        Canvas.SetLeft(BallHighlight, ballCx - (_ballW / 2));
+        Canvas.SetTop(BallHighlight, ballCy - (_ballH / 2));
         Canvas.SetLeft(BallRing, ballCx - (BallRing.Width / 2));
         Canvas.SetTop(BallRing, ballCy - (BallRing.Height / 2));
 
@@ -354,8 +444,11 @@ public sealed partial class WidgetDrawerWindow : Window
         Canvas.SetLeft(BallGlyph, ballCx - (BallGlyph.DesiredSize.Width / 2));
         Canvas.SetTop(BallGlyph, ballCy - (BallGlyph.DesiredSize.Height / 2));
 
-        Canvas.SetLeft(StateDot, ballCx + 12);
-        Canvas.SetTop(StateDot, ballCy + 12);
+        Canvas.SetLeft(StateDot, ballCx + (_ballW / 2) - 8);
+        Canvas.SetTop(StateDot, ballCy + (_ballH / 2) - 8);
+
+        Canvas.SetLeft(Badge, ballCx + (_ballW / 2) - Badge.Width + 2);
+        Canvas.SetTop(Badge, ballCy - (_ballH / 2) - 2);
     }
 
     private SizeInt32 WindowSizePixels(double diameterDip)
@@ -417,6 +510,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
     public void ShowAtSavedSpot()
     {
+        ApplyShape();
         ApplyScale();
 
         AppWindow appWindow = GetAppWindow();
@@ -424,7 +518,7 @@ public sealed partial class WidgetDrawerWindow : Window
             .GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary)
             .WorkArea;
 
-        int size = (int)Math.Round(ClosedSize * _scale);
+        int size = (int)Math.Round(_closedSize * _scale);
         int margin = (int)Math.Round(ScreenMargin * _scale);
 
         int x = work.X + work.Width - size - margin;
@@ -438,7 +532,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
         try
         {
-            appWindow.Resize(WindowSizePixels(ClosedSize));
+            appWindow.Resize(WindowSizePixels(_closedSize));
             appWindow.Move(new PointInt32(x, y));
         }
         catch (Exception ex)
@@ -488,7 +582,7 @@ public sealed partial class WidgetDrawerWindow : Window
         }
         else
         {
-            diameter = ClosedSize;
+            diameter = _closedSize;
             int closedPixels = Math.Max(8, (int)Math.Round(diameter * _scale));
             PointInt32 back = _restoreCenterPixels ?? center;
             _restoreCenterPixels = null;
@@ -532,36 +626,55 @@ public sealed partial class WidgetDrawerWindow : Window
 
     // ------------------------------------------------------------- appearance
 
+    /// <summary>
+    /// 玻璃渲染：底色取玻璃主题（Fill=null 时跟随格子材料色），不透明度写进
+    /// 颜色 alpha 而不是 Ball.Opacity —— 后者会把描边一起淡掉，球就显得脏。
+    /// </summary>
     private void ApplyColor()
     {
-        Ball.Fill = new SolidColorBrush(Color.FromArgb(255, 59, 130, 246));
+        DrawerGlassPreset preset = _settings.ResolveGlass();
+        bool dark = RootGrid.ActualTheme != ElementTheme.Light;
 
-        DrawerColorPreset preset = ResolvePreset();
+        Color baseColor = preset.Fill is null
+            ? (dark ? Color.FromArgb(255, 32, 32, 32) : Color.FromArgb(255, 243, 243, 243))
+            : ParseColor(preset.Fill);
+
+        byte alpha = (byte)Math.Clamp(Math.Round(preset.Opacity * 255), 40, 255);
+        Color top = WithAlpha(Shade(baseColor, 1.16), alpha);
+        Color bottom = WithAlpha(Shade(baseColor, 0.86), alpha);
+
         Ball.Fill = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0.25, 0.05),
             EndPoint = new Windows.Foundation.Point(0.75, 0.95),
             GradientStops =
             {
-                new GradientStop { Color = ParseColor(preset.Start), Offset = 0 },
-                new GradientStop { Color = ParseColor(preset.End), Offset = 1 }
+                new GradientStop { Color = top, Offset = 0 },
+                new GradientStop { Color = bottom, Offset = 1 }
             }
         };
 
-        Color rim = ParseColor(preset.Rim);
-        BallRing.Stroke = new SolidColorBrush(Color.FromArgb(70, rim.R, rim.G, rim.B));
-        Ball.Stroke = new SolidColorBrush(Color.FromArgb(190, rim.R, rim.G, rim.B));
-        Ball.StrokeThickness = 1.4;
+        BallHighlight.Opacity = Math.Clamp(preset.Highlight, 0, 1);
+
+        Color rim = preset.LightText
+            ? Color.FromArgb(255, 255, 255, 255)
+            : Color.FromArgb(255, 28, 28, 28);
+
+        Ball.Stroke = new SolidColorBrush(WithAlpha(rim, (byte)Math.Clamp(Math.Round(preset.RimOpacity * 255), 20, 255)));
+        Ball.StrokeThickness = 1;
+        BallRing.Stroke = new SolidColorBrush(WithAlpha(rim, 70));
+        BallGlyph.Foreground = new SolidColorBrush(preset.LightText
+            ? Colors.White
+            : Color.FromArgb(255, 28, 28, 28));
+        Badge.BorderBrush = new SolidColorBrush(WithAlpha(rim, 200));
     }
 
-    /// <summary>颜色不再跟随系统明暗：Windows 浅色主题会解析成蓝色、深色主题解析成
-    /// 青色，于是两台机器明明都是最新版却一蓝一青，用户只会认为版本不一致。
-    /// 现在默认一律青（用户手选过的预设照旧生效）。</summary>
-    private DrawerColorPreset ResolvePreset() => _settings.ResolveColor();
+    private static Color WithAlpha(Color color, byte alpha) =>
+        Color.FromArgb(alpha, color.R, color.G, color.B);
 
     private static Color ParseColor(string hex)
     {
-        string value = hex.TrimStart('#');
+        string value = (hex ?? string.Empty).TrimStart('#');
         if (value.Length == 6 &&
             byte.TryParse(value.Substring(0, 2), NumberStyles.HexNumber, null, out byte r) &&
             byte.TryParse(value.Substring(2, 2), NumberStyles.HexNumber, null, out byte g) &&
@@ -570,24 +683,96 @@ public sealed partial class WidgetDrawerWindow : Window
             return Color.FromArgb(255, r, g, b);
         }
 
-        return Color.FromArgb(255, 59, 130, 246);
+        return Color.FromArgb(255, 32, 32, 32);
     }
 
     private void UpdateStateDot()
     {
         bool parked = (Application.Current as App)?.WidgetsParked == true;
         StateDot.Visibility = parked ? Visibility.Visible : Visibility.Collapsed;
-        BallGlyph.Text = parked ? "呼" : "格";
+        if (BallGlyph.Text != "记" && (Application.Current as App)?.DrawerCountdownRemaining is null)
+        {
+            BallGlyph.Text = parked ? "呼" : "格";
+        }
     }
 
     public void Refresh()
     {
+        ApplyShape();
         ApplyColor();
         UpdateStateDot();
+        UpdateTooltip();
+        Relayout();
+        ApplyWindowClip();
         if (_expanded)
         {
             BuildFan();
         }
+
+        _ = RefreshBadgeAsync();
+    }
+
+    /// <summary>球面上闪一个字符（✓ / 存 / 铃 / !），约 2 秒后恢复。</summary>
+    public void FlashGlyph(string glyph, string title, string? detail)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(glyph))
+            {
+                BallGlyph.Text = glyph.Substring(0, 1);
+            }
+
+            var panel = new StackPanel { Spacing = 3 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = detail,
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 280,
+                    Foreground = new SolidColorBrush(Color.FromArgb(200, 120, 120, 120))
+                });
+            }
+
+            ToolTipService.SetToolTip(RootGrid, panel);
+
+            _flashTimer ??= DispatcherQueue.CreateTimer();
+            _flashTimer.Interval = TimeSpan.FromSeconds(2.2);
+            _flashTimer.IsRepeating = false;
+            _flashTimer.Tick -= FlashTimerTick;
+            _flashTimer.Tick += FlashTimerTick;
+            _flashTimer.Stop();
+            _flashTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] flash glyph failed: {ex.Message}");
+        }
+    }
+
+    private void FlashTimerTick(DispatcherQueueTimer sender, object args)
+    {
+        sender.Stop();
+        UpdateStateDot();
+        UpdateTooltip();
+    }
+
+    /// <summary>设置页改完从磁盘重载后调用：形态/玻璃/尺寸可能都变了。</summary>
+    public void ApplySettingsFromStore()
+    {
+        ApplyShape();
+        ApplyColor();
+        Relayout();
+        ApplyWindowClip();
+        ShowAtSavedSpot();
+        _ = RefreshBadgeAsync();
     }
 
     private void Animate(UIElement target, double to)
@@ -609,6 +794,136 @@ public sealed partial class WidgetDrawerWindow : Window
         catch (Exception ex)
         {
             App.Log($"[Drawer] fade failed: {ex.Message}");
+        }
+    }
+
+    // ------------------------------------------------------------------ badge
+
+    private void StartBadgeTimer()
+    {
+        try
+        {
+            _badgeTimer ??= DispatcherQueue.CreateTimer();
+            _badgeTimer.Interval = TimeSpan.FromSeconds(60);
+            _badgeTimer.IsRepeating = true;
+            _badgeTimer.Tick += (_, _) => _ = RefreshBadgeAsync();
+            _badgeTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] badge timer failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>角标的数字 = 待归类文件数 + 暂存文件数；备忘未完成数优先显示。</summary>
+    private async System.Threading.Tasks.Task RefreshBadgeAsync()
+    {
+        if (_badgeBusy)
+        {
+            return;
+        }
+
+        _badgeBusy = true;
+        try
+        {
+            int notes = _settings.OpenNoteCount();
+            int pending = 0;
+            int staged = 0;
+            CompanionStatus status = await CompanionClient.GetStatusAsync();
+            if (status.Reachable)
+            {
+                pending = status.PendingCount;
+            }
+
+            if (Application.Current is App app)
+            {
+                app.NoteDrawerStatus(status);
+                staged = await app.CountStagedFilesAsync();
+            }
+
+            int total = notes + pending + staged;
+            if (total > 0)
+            {
+                Badge.Visibility = Visibility.Visible;
+                BadgeText.Text = total > 99 ? "99+" : total.ToString(CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                Badge.Visibility = Visibility.Collapsed;
+            }
+
+            UpdateTooltip(status, pending, staged, notes);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] badge refresh failed: {ex.Message}");
+        }
+        finally
+        {
+            _badgeBusy = false;
+        }
+    }
+
+    // ----------------------------------------------------------------- tooltip
+
+    private void UpdateTooltip(
+        CompanionStatus? status = null,
+        int pending = 0,
+        int staged = 0,
+        int notes = 0)
+    {
+        try
+        {
+            var panel = new StackPanel { Spacing = 3 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = status is { Reachable: true }
+                    ? "最近整理 " + status.LastApplyCount + " 个"
+                    : "管家引擎未运行",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+
+            if (pending > 0)
+            {
+                panel.Children.Add(new TextBlock { Text = "待归类 " + pending + " 个", FontSize = 12 });
+            }
+
+            if (staged > 0)
+            {
+                panel.Children.Add(new TextBlock { Text = "暂存 " + staged + " 个", FontSize = 12 });
+            }
+
+            if (notes > 0)
+            {
+                panel.Children.Add(new TextBlock { Text = "备忘 " + notes + " 条", FontSize = 12 });
+            }
+
+            if (status is { Reachable: true } && !string.IsNullOrWhiteSpace(status.LastError))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "错误：" + status.LastError,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromArgb(255, 214, 90, 90)),
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 260
+                });
+            }
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "左键展开格子　右键菜单　拖文件到这里暂存",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromArgb(180, 120, 120, 120)),
+                Margin = new Thickness(0, 3, 0, 0)
+            });
+
+            ToolTipService.SetToolTip(RootGrid, panel);
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] tooltip failed: {ex.Message}");
         }
     }
 
@@ -667,6 +982,7 @@ public sealed partial class WidgetDrawerWindow : Window
                 args.Handled = true;
                 await app.ToggleWidgetAsync(widgetId);
                 BuildFan();
+                UpdateStateDot();
             };
 
             FanCanvas.Children.Add(sector);
@@ -726,10 +1042,15 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private Brush BuildSectorBrush(double directionDegrees, bool visible, bool hovered = false)
     {
-        DrawerColorPreset preset = ResolvePreset();
-        Color inner = Shade(ParseColor(preset.Start), hovered ? 1.06 : 0.74);
-        Color outer = Shade(ParseColor(preset.End), hovered ? 0.78 : 0.46);
-        byte alpha = hovered ? (byte)255 : visible ? (byte)250 : (byte)158;
+        DrawerGlassPreset preset = _settings.ResolveGlass();
+        bool dark = RootGrid.ActualTheme != ElementTheme.Light;
+        Color baseColor = preset.Fill is null
+            ? (dark ? Color.FromArgb(255, 32, 32, 32) : Color.FromArgb(255, 243, 243, 243))
+            : ParseColor(preset.Fill);
+
+        Color inner = Shade(baseColor, hovered ? 1.10 : 0.82);
+        Color outer = Shade(baseColor, hovered ? 0.86 : 0.56);
+        byte alpha = hovered ? (byte)245 : visible ? (byte)238 : (byte)150;
 
         double rad = directionDegrees * Math.PI / 180;
         double cx = Math.Cos(rad) / 2;
@@ -798,9 +1119,10 @@ public sealed partial class WidgetDrawerWindow : Window
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
+        StopIdleTimer();
         if (!_expanded)
         {
-            Animate(Ball, 1.0);
+            Animate(BallLayer, 1.0);
         }
     }
 
@@ -808,7 +1130,51 @@ public sealed partial class WidgetDrawerWindow : Window
     {
         if (!_dragging && !_expanded)
         {
-            Animate(Ball, 0.62);
+            if (_settings.IdleFade)
+            {
+                StartIdleTimer();
+            }
+            else
+            {
+                Animate(BallLayer, 1.0);
+            }
+        }
+    }
+
+    private void StartIdleTimer()
+    {
+        try
+        {
+            _idleTimer ??= DispatcherQueue.CreateTimer();
+            _idleTimer.Interval = TimeSpan.FromSeconds(8);
+            _idleTimer.IsRepeating = false;
+            _idleTimer.Tick += (_, _) =>
+            {
+                if (!_dragging && !_expanded)
+                {
+                    Animate(BallLayer, 0.35);
+                }
+
+                _idleTimer?.Stop();
+            };
+            _idleTimer.Stop();
+            _idleTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] idle timer failed: {ex.Message}");
+        }
+    }
+
+    private void StopIdleTimer()
+    {
+        try
+        {
+            _idleTimer?.Stop();
+        }
+        catch (Exception)
+        {
+            // timers are cosmetic
         }
     }
 
@@ -871,8 +1237,9 @@ public sealed partial class WidgetDrawerWindow : Window
         Windows.Foundation.Point p = e.GetCurrentPoint(RootGrid).Position;
         double dx = p.X - (RootGrid.ActualWidth / 2);
         double dy = p.Y - (RootGrid.ActualHeight / 2);
-        double limit = (ClosedSize / 2) + 12;
-        return ((dx * dx) + (dy * dy)) <= (limit * limit);
+        double limitX = (_ballW / 2) + 14;
+        double limitY = (_ballH / 2) + 14;
+        return ((dx * dx) / (limitX * limitX)) + ((dy * dy) / (limitY * limitY)) <= 1.0;
     }
 
     private static bool IsSectorSource(object? source)
@@ -910,6 +1277,7 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         _dragging = true;
+        StopIdleTimer();
         try
         {
             GetAppWindow().Move(new PointInt32(
@@ -933,7 +1301,7 @@ public sealed partial class WidgetDrawerWindow : Window
             // this guard the ring reopened immediately, so a second click on the
             // ball could never close it.
             _collapseHandledPress = false;
-            Animate(Ball, 1.0);
+            Animate(BallLayer, 1.0);
             return;
         }
 
@@ -942,7 +1310,7 @@ public sealed partial class WidgetDrawerWindow : Window
             _dragging = false;
             _centerPressWhileExpanded = false;
             SnapAndPersistPosition();
-            Animate(Ball, 1.0);
+            Animate(BallLayer, 1.0);
             return;
         }
 
@@ -952,12 +1320,12 @@ public sealed partial class WidgetDrawerWindow : Window
             // path already returned, so no sector ever saw this gesture.
             _centerPressWhileExpanded = false;
             SetExpanded(false);
-            Animate(Ball, 1.0);
+            Animate(BallLayer, 1.0);
             return;
         }
 
         SetExpanded(true);
-        Animate(Ball, 1.0);
+        Animate(BallLayer, 1.0);
     }
 
     private void SnapAndPersistPosition()
@@ -970,8 +1338,8 @@ public sealed partial class WidgetDrawerWindow : Window
                 .WorkArea;
             PointInt32 current = appWindow.Position;
             SizeInt32 real = appWindow.Size;
-            int sizeW = real.Width > 0 ? real.Width : (int)Math.Round(ClosedSize * _scale);
-            int sizeH = real.Height > 0 ? real.Height : (int)Math.Round(ClosedSize * _scale);
+            int sizeW = real.Width > 0 ? real.Width : (int)Math.Round(_closedSize * _scale);
+            int sizeH = real.Height > 0 ? real.Height : (int)Math.Round(_closedSize * _scale);
             int margin = (int)Math.Round(ScreenMargin * _scale);
             int x = current.X;
             int y = current.Y;
@@ -1002,7 +1370,7 @@ public sealed partial class WidgetDrawerWindow : Window
             // Persist the position of the *collapsed* window: a drag can happen
             // while the ring is open, and saving that bigger window's origin
             // made the bead reappear offset by half the ring on the next launch.
-            int closed = (int)Math.Round(ClosedSize * _scale);
+            int closed = (int)Math.Round(_closedSize * _scale);
             _settings.X = x + ((sizeW - closed) / 2);
             _settings.Y = y + ((sizeH - closed) / 2);
             _settings.Save();
@@ -1010,6 +1378,68 @@ public sealed partial class WidgetDrawerWindow : Window
         catch (Exception ex)
         {
             App.Log($"[Drawer] snap failed: {ex.Message}");
+        }
+    }
+
+    // -------------------------------------------------------------------- drop
+
+    private void RootGrid_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+            try
+            {
+                e.DragUIOverride.Caption = "暂存到「资料库\\_暂存」";
+                e.DragUIOverride.IsCaptionVisible = true;
+                e.DragUIOverride.IsGlyphVisible = true;
+            }
+            catch (Exception)
+            {
+                // DragUIOverride is best-effort on some shells.
+            }
+        }
+    }
+
+    private async void RootGrid_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<IStorageItem> items = await e.DataView.GetStorageItemsAsync();
+            var paths = new List<string>();
+            foreach (IStorageItem item in items)
+            {
+                if (!string.IsNullOrEmpty(item.Path))
+                {
+                    paths.Add(item.Path);
+                }
+            }
+
+            if (paths.Count == 0)
+            {
+                return;
+            }
+
+            if (Application.Current is App app)
+            {
+                (int moved, string message) = await app.StageFilesAsync(paths);
+                if (moved > 0)
+                {
+                    Animate(BallLayer, 1.0);
+                }
+
+                App.Log($"[Drawer] staging dropped {moved}/{paths.Count}: {message}");
+                _ = RefreshBadgeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] drop failed: {ex.Message}");
         }
     }
 
@@ -1026,6 +1456,80 @@ public sealed partial class WidgetDrawerWindow : Window
 
         var flyout = new MenuFlyout { ShouldConstrainToRootBounds = false };
 
+        var search = new MenuFlyoutItem { Text = "搜索文件…", Icon = new FontIcon { Glyph = "\uE721" } };
+        search.Click += (_, _) => app.OpenSearchPopup();
+
+        var plan = new MenuFlyoutItem { Text = "预览整理" };
+        plan.Click += async (_, _) => await app.ShowDrawerOrganizePreviewAsync();
+
+        var organize = new MenuFlyoutItem { Text = "立即整理" };
+        organize.Click += async (_, _) => await app.RunDrawerOrganizeAsync();
+
+        var library = new MenuFlyoutItem { Text = "打开资料库", Icon = new FontIcon { Glyph = "\uE8B7" } };
+        library.Click += async (_, _) => await app.OpenDrawerLibraryAsync();
+
+        var staging = new MenuFlyoutItem { Text = "打开暂存" };
+        staging.Click += async (_, _) => await app.OpenDrawerStagingAsync();
+
+        var note = new MenuFlyoutItem { Text = "记一条备忘…", Icon = new FontIcon { Glyph = "\uE70B" } };
+        note.Click += async (_, _) => await AddNoteAsync(app);
+
+        var notes = new MenuFlyoutItem { Text = "查看备忘" };
+        notes.Click += async (_, _) => await ShowNotesAsync(app);
+
+        // ── 我的常用 ──────────────────────────────────────────────
+        var shortcuts = new MenuFlyoutSubItem { Text = "我的常用", Icon = new FontIcon { Glyph = "\uE735" } };
+        foreach (DrawerShortcut shortcut in _settings.Shortcuts)
+        {
+            DrawerShortcut captured = shortcut;
+            var item = new MenuFlyoutItem { Text = captured.Name };
+            item.Click += async (_, _) => await app.OpenDrawerShortcutAsync(captured);
+            shortcuts.Items.Add(item);
+        }
+
+        if (shortcuts.Items.Count == 0)
+        {
+            shortcuts.Items.Add(new MenuFlyoutItem { Text = "（在设置页添加）", IsEnabled = false });
+        }
+
+        // ── 常用短语 ──────────────────────────────────────────────
+        var phrases = new MenuFlyoutSubItem { Text = "常用短语", Icon = new FontIcon { Glyph = "\uE8BD" } };
+        foreach (string phrase in _settings.Phrases)
+        {
+            string captured = phrase;
+            string preview = captured.Length > 18 ? captured.Substring(0, 18) + "…" : captured;
+            var item = new MenuFlyoutItem { Text = preview };
+            item.Click += (_, _) => app.CopyDrawerPhrase(captured);
+            phrases.Items.Add(item);
+        }
+
+        if (phrases.Items.Count == 0)
+        {
+            phrases.Items.Add(new MenuFlyoutItem { Text = "（在设置页添加）", IsEnabled = false });
+        }
+
+        // ── 最近整理 ──────────────────────────────────────────────
+        var recent = new MenuFlyoutSubItem { Text = "最近整理", Icon = new FontIcon { Glyph = "\uE81C" } };
+        IReadOnlyList<(string Name, string Folder)> recentItems = app.DrawerRecentMoves();
+        foreach ((string name, string folder) in recentItems)
+        {
+            string capturedFolder = folder;
+            var item = new MenuFlyoutItem { Text = name };
+            item.Click += (_, _) => app.OpenDrawerFolder(capturedFolder);
+            recent.Items.Add(item);
+        }
+
+        if (recent.Items.Count == 0)
+        {
+            recent.Items.Add(new MenuFlyoutItem { Text = "（还没有整理记录）", IsEnabled = false });
+        }
+
+        var capture = new MenuFlyoutItem { Text = "截图（存到资料库\\_截图）", Icon = new FontIcon { Glyph = "\uE722" } };
+        capture.Click += async (_, _) => await app.CaptureDrawerScreenshotAsync();
+
+        var timer = new MenuFlyoutItem { Text = "考试倒计时…", Icon = new FontIcon { Glyph = "\uE916" } };
+        timer.Click += async (_, _) => await StartCountdownAsync();
+
         var raiseAll = new MenuFlyoutItem { Text = "呼出全部格子" };
         raiseAll.Click += async (_, _) =>
         {
@@ -1040,45 +1544,266 @@ public sealed partial class WidgetDrawerWindow : Window
             UpdateStateDot();
         };
 
-        flyout.Items.Add(raiseAll);
-        flyout.Items.Add(hideAll);
-
-        var colors = new MenuFlyoutSubItem { Text = "颜色" };
-        foreach (DrawerColorPreset preset in WidgetDrawerSettings.Presets)
+        // ── 玻璃主题 ──────────────────────────────────────────────
+        var glasses = new MenuFlyoutSubItem { Text = "玻璃主题", Icon = new FontIcon { Glyph = "\uE790" } };
+        foreach (DrawerGlassPreset preset in WidgetDrawerSettings.Glasses)
         {
-            DrawerColorPreset captured = preset;
+            DrawerGlassPreset captured = preset;
             var item = new MenuFlyoutItem
             {
-                Text = captured.Id == _settings.Color ? "✓ " + captured.Name : "　" + captured.Name
+                Text = string.Equals(captured.Id, _settings.Glass, StringComparison.OrdinalIgnoreCase)
+                    ? "✓ " + captured.Name
+                    : "　" + captured.Name
             };
             item.Click += (_, _) =>
             {
-                _settings.Color = captured.Id;
+                _settings.Glass = captured.Id;
                 _settings.Save();
                 ApplyColor();
-                if (_expanded)
-                {
-                    BuildFan();
-                }
-
                 app.RefreshDrawerAppearance();
             };
-            colors.Items.Add(item);
+            glasses.Items.Add(item);
+        }
+
+        // ── 形态 ──────────────────────────────────────────────────
+        var shapes = new MenuFlyoutSubItem { Text = "形态", Icon = new FontIcon { Glyph = "\uE7C4" } };
+        foreach ((string id, string name) in WidgetDrawerSettings.Shapes)
+        {
+            string capturedId = id;
+            var item = new MenuFlyoutItem
+            {
+                Text = string.Equals(capturedId, _settings.Shape, StringComparison.OrdinalIgnoreCase)
+                    ? "✓ " + name
+                    : "　" + name
+            };
+            item.Click += (_, _) =>
+            {
+                _settings.Shape = capturedId;
+                _settings.Save();
+                ApplySettingsFromStore();
+                app.RefreshDrawerAppearance();
+            };
+            shapes.Items.Add(item);
         }
 
         var panel = new MenuFlyoutItem { Text = "打开桌面管家面板" };
         panel.Click += (_, _) => app.OpenCompanionPanelFromDrawer();
 
-        var close = new MenuFlyoutItem { Text = "关闭抽屉" };
-        close.Click += (_, _) => app.CloseWidgetDrawer();
+        var hide = new MenuFlyoutItem { Text = "隐藏悬浮球", Icon = new FontIcon { Glyph = "\uE7B3" } };
+        hide.Click += (_, _) => app.HideWidgetDrawerFromBall();
 
+        flyout.Items.Add(search);
+        flyout.Items.Add(plan);
+        flyout.Items.Add(organize);
         flyout.Items.Add(new MenuFlyoutSeparator());
-        flyout.Items.Add(colors);
+        flyout.Items.Add(library);
+        flyout.Items.Add(staging);
+        flyout.Items.Add(shortcuts);
+        flyout.Items.Add(recent);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(note);
+        flyout.Items.Add(notes);
+        flyout.Items.Add(phrases);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(capture);
+        flyout.Items.Add(timer);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(raiseAll);
+        flyout.Items.Add(hideAll);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(glasses);
+        flyout.Items.Add(shapes);
         flyout.Items.Add(panel);
         flyout.Items.Add(new MenuFlyoutSeparator());
-        flyout.Items.Add(close);
+        flyout.Items.Add(hide);
 
         flyout.ShowAt(Ball, new FlyoutShowOptions { Position = e.GetPosition(Ball) });
         e.Handled = true;
+    }
+
+    // ------------------------------------------------------------------- notes
+
+    private async System.Threading.Tasks.Task AddNoteAsync(App app)
+    {
+        SetExpanded(false);
+        try
+        {
+            var box = new TextBox
+            {
+                PlaceholderText = "例如：明天交控辍保学汇总表",
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                Height = 96
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "记一条备忘",
+                Content = box,
+                PrimaryButtonText = "保存",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootGrid.XamlRoot
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            string text = box.Text.Trim();
+            if (text.Length == 0)
+            {
+                return;
+            }
+
+            _settings.Notes.Insert(0, new DrawerNote { Text = text });
+            _settings.Save();
+            _ = RefreshBadgeAsync();
+            app.RefreshDrawerAppearance();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] note dialog failed: {ex.Message}");
+        }
+    }
+
+    private async System.Threading.Tasks.Task ShowNotesAsync(App app)
+    {
+        SetExpanded(false);
+        try
+        {
+            var panel = new StackPanel { Spacing = 6 };
+            bool any = false;
+            foreach (DrawerNote note in _settings.Notes)
+            {
+                if (note.Done)
+                {
+                    continue;
+                }
+
+                any = true;
+                var check = new CheckBox
+                {
+                    Content = note.Created + "　" + note.Text,
+                    IsChecked = false,
+                    Tag = note.Id
+                };
+                check.Checked += (sender, _) =>
+                {
+                    if (sender is CheckBox checkbox && checkbox.Tag is string id)
+                    {
+                        foreach (DrawerNote target in _settings.Notes)
+                        {
+                            if (target.Id == id)
+                            {
+                                target.Done = true;
+                                break;
+                            }
+                        }
+
+                        _settings.Save();
+                        _ = RefreshBadgeAsync();
+                    }
+                };
+                panel.Children.Add(check);
+            }
+
+            if (!any)
+            {
+                panel.Children.Add(new TextBlock { Text = "没有未完成的备忘。", Opacity = 0.7 });
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "备忘",
+                Content = new ScrollViewer { Content = panel, MaxHeight = 360 },
+                PrimaryButtonText = "清除已完成",
+                CloseButtonText = "关闭",
+                XamlRoot = RootGrid.XamlRoot
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                _settings.Notes.RemoveAll(note => note.Done);
+                _settings.Save();
+                _ = RefreshBadgeAsync();
+                app.RefreshDrawerAppearance();
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] notes dialog failed: {ex.Message}");
+        }
+    }
+
+    // --------------------------------------------------------------- countdown
+
+    private async System.Threading.Tasks.Task StartCountdownAsync()
+    {
+        SetExpanded(false);
+        try
+        {
+            var picker = new ComboBox { SelectedIndex = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+            picker.Items.Add("45 分钟");
+            picker.Items.Add("60 分钟");
+            picker.Items.Add("90 分钟");
+            picker.Items.Add("120 分钟");
+
+            var dialog = new ContentDialog
+            {
+                Title = "考试倒计时",
+                Content = picker,
+                PrimaryButtonText = "开始",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootGrid.XamlRoot
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            int minutes = picker.SelectedIndex switch
+            {
+                0 => 45,
+                2 => 90,
+                3 => 120,
+                _ => 60
+            };
+
+            if (Application.Current is App app)
+            {
+                app.StartDrawerCountdown(TimeSpan.FromMinutes(minutes));
+            }
+
+            UpdateCountdownGlyph();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] countdown dialog failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>倒计时期间球面上显示剩余分钟数；由 App 的计时器每秒推一次。</summary>
+    public void UpdateCountdownGlyph()
+    {
+        if (Application.Current is not App app)
+        {
+            return;
+        }
+
+        TimeSpan? remaining = app.DrawerCountdownRemaining;
+        if (remaining is null)
+        {
+            UpdateStateDot();
+            return;
+        }
+
+        int minutes = (int)Math.Ceiling(remaining.Value.TotalMinutes);
+        BallGlyph.Text = minutes > 99 ? "99" : Math.Max(0, minutes).ToString(CultureInfo.InvariantCulture);
     }
 }
