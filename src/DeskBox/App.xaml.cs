@@ -1463,6 +1463,10 @@ public partial class App : Application
             // Non-null past this point: the critical step above rethrows on
             // failure, so the launch never reaches here without a manager.
             WidgetManager widgetManager = WidgetManager!;
+            // 双机自动同步：本地布局/样式/球外观一变就写进库里的 layout.json，
+            // 另一台 20 秒内自己应用。没有按钮，失败只进日志，不影响启动。
+            RunOptionalStartupStep("layout-auto-sync",
+                () => DeskBox.Services.LayoutSync.LayoutAutoSync.Start(this));
             RunOptionalStartupStep("desktop-double-click-activation", () =>
             {
                 DesktopDoubleClickActivationService = new DesktopDoubleClickActivationService(

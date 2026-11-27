@@ -311,10 +311,10 @@
                     <TextBlock Text="布局同步" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
-                           Text="把格子（位置、大小、指向的文件夹）和悬浮球的样式同步到另一台。位置按屏幕边角记录，两台分辨率不同也不会跑出屏外；本机的热键、路径、密钥不参与同步。" />
+                           Text="格子位置、大小、样式、胶囊顺序和悬浮球外观会在两台之间自动同步（约 20 秒内互见），不需要手动操作。下面两个按钮只是兜底：自动合并的结果不是你想要的时，才用它们强制覆盖另一端。" />
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <Button x:Name="LayoutPushButton" Click="LayoutPushButton_Click" Content="推送到另一台" />
-                    <Button x:Name="LayoutPullButton" Click="LayoutPullButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="以另一台为准" />
+                    <Button x:Name="LayoutPushButton" Click="LayoutPushButton_Click" Content="强制以本机为准" />
+                    <Button x:Name="LayoutPullButton" Click="LayoutPullButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="强制以另一台为准" />
                 </StackPanel>
                 <TextBlock x:Name="LayoutMessage" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
             </StackPanel>
