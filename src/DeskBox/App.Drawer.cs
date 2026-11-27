@@ -393,60 +393,13 @@ public partial class App
             return (0, "建暂存目录失败：" + ex.Message);
         }
 
-        int moved = 0;
-        var failures = new List<string>();
-        foreach (string path in paths)
-        {
-            try
-            {
-                if (Directory.Exists(path))
-                {
-                    failures.Add(Path.GetFileName(path) + "（是文件夹）");
-                    continue;
-                }
-
-                if (!File.Exists(path))
-                {
-                    continue;
-                }
-
-                string dest = UniqueDestination(day, Path.GetFileName(path));
-                File.Move(path, dest);
-                moved++;
-            }
-            catch (Exception ex)
-            {
-                failures.Add(Path.GetFileName(path) + "（" + ex.Message + "）");
-            }
-        }
+        (int moved, List<string> failures) = Platform.DrawerStaging.MoveFiles(day, paths);
 
         FlashDrawerGlyph(
             moved > 0 ? "存" : "!",
             moved > 0 ? "已暂存 " + moved + " 个文件" : "暂存失败",
             failures.Count == 0 ? null : string.Join("；", failures));
         return (moved, failures.Count == 0 ? "已暂存" : string.Join("；", failures));
-    }
-
-    private static string UniqueDestination(string folder, string fileName)
-    {
-        string dest = Path.Combine(folder, fileName);
-        if (!File.Exists(dest))
-        {
-            return dest;
-        }
-
-        string stem = Path.GetFileNameWithoutExtension(fileName);
-        string ext = Path.GetExtension(fileName);
-        for (int i = 2; i < 1000; i++)
-        {
-            dest = Path.Combine(folder, stem + "_" + i + ext);
-            if (!File.Exists(dest))
-            {
-                return dest;
-            }
-        }
-
-        return Path.Combine(folder, stem + "_" + Guid.NewGuid().ToString("N").Substring(0, 6) + ext);
     }
 
     /// <summary>暂存目录里的文件数（角标用；最多数到 999）。</summary>
