@@ -86,6 +86,75 @@ internal static class ItemSyncBridge
         }
     }
 
+    /// <summary>
+    /// 定时拉取：本机不编辑也要能收到另一台的改动。遍历镜像目录，找到对应
+    /// 的本地库文件，合并后写回（合并逻辑与读盘时一致）。
+    /// </summary>
+    public static int PullAll()
+    {
+        if (string.IsNullOrEmpty(LibraryRoot))
+        {
+            return 0;
+        }
+
+        int changed = 0;
+        string dir = Path.Combine(LibraryRoot, StateDirName, "items");
+        if (!Directory.Exists(dir))
+        {
+            return 0;
+        }
+
+        foreach (string mirror in Directory.EnumerateFiles(dir, "*.json"))
+        {
+            string key = Path.GetFileNameWithoutExtension(mirror);
+            string? localPath = LocalPathFor(key);
+            if (localPath is null || !File.Exists(localPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                string localJson = File.ReadAllText(localPath);
+                MergeResult result = MergeCore(key, localJson, synthesiseDeletions: false);
+                if (result.LocalChanged)
+                {
+                    File.WriteAllText(localPath, result.LocalJson);
+                    changed++;
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Log("[ItemSync] pull " + key + " failed: " + ex.Message);
+            }
+        }
+
+        return changed;
+    }
+
+    /// <summary>镜像键 → 本地库文件。未知键返回 null（不认识的文件不动）。</summary>
+    private static string? LocalPathFor(string key)
+    {
+        string data = DeskBoxDataPathService.Current.DataDirectory;
+        if (key.StartsWith("todo-", StringComparison.Ordinal))
+        {
+            string widgetId = key.Substring("todo-".Length);
+            if (widgetId.Length == 0)
+            {
+                return null;
+            }
+
+            return Path.Combine(data, "widgets", widgetId, "todo.json");
+        }
+
+        if (key == "quick-capture")
+        {
+            return Path.Combine(data, "quick-capture", "quick-capture.json");
+        }
+
+        return null;
+    }
+
     private static MergeResult MergeCore(string key, string localJson, bool synthesiseDeletions)
     {
         if (string.IsNullOrEmpty(LibraryRoot))

@@ -124,6 +124,16 @@ internal sealed class LayoutAutoSync
             }
 
             _ticks++;
+
+            // 待办/随手记：本机不编辑也要收到另一台的改动（每 3 轮=约 60 秒）。
+            if (_ticks % 3 == 0)
+            {
+                int pulled = ItemSyncBridge.PullAll();
+                if (pulled > 0)
+                {
+                    App.Log($"[ItemSync] 收到另一台 {pulled} 份待办/随手记更新");
+                }
+            }
             LayoutDocBuilder.BuildResult build = LayoutDocBuilder.Build(_app, _library, _state);
             JsonElement? incoming = null;
 
