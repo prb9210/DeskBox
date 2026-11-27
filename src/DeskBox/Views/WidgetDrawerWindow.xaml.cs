@@ -1579,6 +1579,18 @@ public sealed partial class WidgetDrawerWindow : Window
 
                 break;
 
+            case DrawerFanKind.Scan:
+                if (paths.Count > 0)
+                {
+                    await app.ScanImagesToPdfAsync(paths);
+                }
+                else
+                {
+                    await app.OpenDrawerScanFolderAsync();
+                }
+
+                break;
+
             case DrawerFanKind.Organize:
                 // 整理的是整张桌面；真有文件被投到这里就先暂存，别让用户白拖。
                 if (paths.Count > 0)

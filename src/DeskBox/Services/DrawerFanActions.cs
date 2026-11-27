@@ -20,6 +20,9 @@ public enum DrawerFanKind
     /// <summary>点击 → 立刻整理桌面；不接受拖入（整理的是桌面，不是某个文件）。</summary>
     Organize,
 
+    /// <summary>拖图片 → 扫描成增强 PDF（坚果云\扫描资料）；点击 → 打开扫描资料。</summary>
+    Scan,
+
     /// <summary>点击 → 全屏截图并复制；不接受拖入。</summary>
     Screenshot,
 }
@@ -40,6 +43,7 @@ public static class DrawerFanActions
 {
     public static IReadOnlyList<DrawerFanAction> All { get; } = new[]
     {
+        new DrawerFanAction("scan", "扫描", DrawerFanKind.Scan, true, "把图片扫成 PDF"),
         new DrawerFanAction("stage", "暂存", DrawerFanKind.Stage, true, "移到 资料库\\_暂存"),
         new DrawerFanAction("pending", "待定", DrawerFanKind.Pending, true, "移到 资料库\\_待归类"),
         new DrawerFanAction("organize", "整理", DrawerFanKind.Organize, false, "立刻整理桌面"),
@@ -47,8 +51,47 @@ public static class DrawerFanActions
     };
 
     /// <summary>Dropping on the bead itself (or in a gap) falls back to staging,
-    /// which is what the ball did before sectors existed.</summary>
-    public static DrawerFanAction Default => All[0];
+    /// which is what the ball did before sectors existed. Deliberately not
+    /// All[0]: the first sector is 扫描 now, and a dropped .docx must not be
+    /// dragged into the image pipeline.</summary>
+    public static DrawerFanAction Default => Find("stage") ?? All[0];
+
+    /// <summary>Extensions the engine can decode itself; anything else has to be
+    /// transcoded to JPEG first (HEIC from an iPhone, BMP/TIFF from a scanner).</summary>
+    public static bool IsImage(string path)
+    {
+        switch (System.IO.Path.GetExtension(path).ToLowerInvariant())
+        {
+            case ".jpg":
+            case ".jpeg":
+            case ".png":
+            case ".gif":
+            case ".bmp":
+            case ".tif":
+            case ".tiff":
+            case ".heic":
+            case ".heif":
+            case ".webp":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>True when the engine's Go decoders handle the file as-is.</summary>
+    public static bool IsDirectImage(string path)
+    {
+        switch (System.IO.Path.GetExtension(path).ToLowerInvariant())
+        {
+            case ".jpg":
+            case ".jpeg":
+            case ".png":
+            case ".gif":
+                return true;
+            default:
+                return false;
+        }
+    }
 
     /// <summary>扇片 0 在正上方，其余顺时针排（与扇片的绘制角度同一套坐标）。</summary>
     public static double MidAngle(int index, int count) =>

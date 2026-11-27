@@ -163,6 +163,34 @@ public static class CompanionClient
     }
 
     /// <summary>POSTs one of the engine's action endpoints and returns its text.</summary>
+    /// <summary>扫描是重活（多页 300dpi 要找纸边、拉正、编码），单独一个长超时
+    /// 的 HttpClient，不能用 15 秒的那个。</summary>
+    private static readonly HttpClient LongHttp = new()
+    {
+        Timeout = TimeSpan.FromSeconds(240),
+    };
+
+    /// <summary>POST /api/docscan：图片 → 增强 PDF。</summary>
+    public static async Task<(bool Ok, string Body)> PostDocScanAsync(
+        string json,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response =
+                await LongHttp.PostAsync(BaseUrl + "/api/docscan", content, cancellationToken)
+                    .ConfigureAwait(false);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return (response.IsSuccessStatusCode, body);
+        }
+        catch (Exception)
+        {
+            return (false, string.Empty);
+        }
+    }
+
     public static async Task<(bool Ok, string Message)> PostAsync(
         string path,
         CancellationToken cancellationToken = default)
