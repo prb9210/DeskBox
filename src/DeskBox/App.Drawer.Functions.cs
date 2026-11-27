@@ -169,7 +169,12 @@ public partial class App
 
             _lastScanFile = file;
             string size = bytes > 0 ? $" · {bytes / 1024 / 1024.0:0.0} MB" : string.Empty;
-            string detail = Path.GetFileName(file) + size;
+            // 显示「扫描资料\扫描_….pdf」：用户一眼看出是落到坚果云还是本地库。
+            string folder = Path.GetFileName(Path.GetDirectoryName(file) ?? string.Empty);
+            string name = string.IsNullOrEmpty(folder)
+                ? Path.GetFileName(file)
+                : Path.Combine(folder, Path.GetFileName(file));
+            string detail = name + size;
             if (!string.IsNullOrEmpty(warning))
             {
                 detail += " · " + warning;
