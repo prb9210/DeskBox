@@ -81,6 +81,7 @@ internal sealed class LayoutAutoSync
             if (_library.Length > 0 && DateTimeOffset.UtcNow - _libraryAt > TimeSpan.FromMinutes(10))
             {
                 _library = string.Empty;
+                ItemSyncBridge.LibraryRoot = string.Empty;
             }
 
             if (_library.Length == 0)
@@ -93,6 +94,8 @@ internal sealed class LayoutAutoSync
 
                 _library = status.Library;
                 _libraryAt = DateTimeOffset.UtcNow;
+                // 待办/随手记的镜像也放在资料库里，跟着一起同步。
+                ItemSyncBridge.LibraryRoot = _library;
             }
 
             // 第一次跑：先拉不推。本机状态是空的，直接推会把出厂默认样式

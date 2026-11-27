@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeskBox.Models;
+using DeskBox.Services.LayoutSync;
 
 namespace DeskBox.Services;
 
@@ -50,37 +51,48 @@ public sealed class QuickCaptureStore
 
     public async Task<QuickCaptureStoreData> LoadAsync()
     {
-        return await ResilientJsonStore.LoadAsync(
+        QuickCaptureStoreData data = await ResilientJsonStore.LoadAsync(
             _storePath,
             json => Normalize(JsonSerializer.Deserialize(
                 json,
                 QuickCaptureJsonContext.Default.StoreData)),
             () => new QuickCaptureStoreData(),
             nameof(QuickCaptureStore));
+
+        try
+        {
+            string current = JsonSerializer.Serialize(
+                data,
+                QuickCaptureJsonContext.Default.StoreData);
+            string? merged = ItemSyncBridge.MergeOnLoad(CollectionKey, current);
+            if (merged is not null)
+            {
+                data = Normalize(JsonSerializer.Deserialize(
+                    merged,
+                    QuickCaptureJsonContext.Default.StoreData));
+                await ResilientJsonStore.SaveAsync(_storePath, merged);
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log("[QuickCaptureStore] sync merge failed: " + ex.Message);
+        }
+
+        return data;
     }
 
     public Task SaveAsync(QuickCaptureStoreData data)
     {
         data = Normalize(data);
-        // Stream the UTF-8 directly into the temp file: materializing the
-        // whole document as a string first doubles the transient footprint
-        // on every save, and quick-capture autosave fires while the user
-        // keeps typing.
-        return ResilientJsonStore.SaveAsync(
-            _storePath,
-            async tempPath =>
-            {
-                await using var stream = new FileStream(
-                    tempPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None);
-                await JsonSerializer.SerializeAsync(
-                    stream,
-                    data,
-                    QuickCaptureJsonContext.Default.StoreData);
-            });
+        // 保存前先和另一台合并（逐条、以最后修改的为准）。quick-capture 的
+        // 自动保存很频繁，但文档只有几十 KB，整篇字符串的代价可以接受。
+        string json = JsonSerializer.Serialize(data, QuickCaptureJsonContext.Default.StoreData);
+        json = ItemSyncBridge.MergeOnSave(CollectionKey, json);
+        return ResilientJsonStore.SaveAsync(_storePath, json);
     }
+
+    /// <summary>共享镜像的键：随手记只有一份库，两台共用一个文件。</summary>
+    private const string CollectionKey = "quick-capture";
 
     private static QuickCaptureStoreData Normalize(QuickCaptureStoreData? data)
     {

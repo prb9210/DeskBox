@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeskBox.Models;
+using DeskBox.Services.LayoutSync;
 
 namespace DeskBox.Services;
 
@@ -22,6 +23,7 @@ internal sealed partial class TodoJsonContext : JsonSerializerContext
 public sealed class TodoWidgetStore
 {
     private readonly string _storePath;
+    private readonly string _collectionKey;
 
     public TodoWidgetStore(string widgetId)
         : this(
@@ -43,6 +45,7 @@ public sealed class TodoWidgetStore
         string dataDir = Path.Combine(widgetsDataRoot, safeWidgetId);
         Directory.CreateDirectory(dataDir);
         _storePath = Path.Combine(dataDir, "todo.json");
+        _collectionKey = "todo-" + safeWidgetId;
     }
 
     internal string StorePath => _storePath;
@@ -51,34 +54,42 @@ public sealed class TodoWidgetStore
 
     public async Task<TodoWidgetData> LoadAsync()
     {
-        return await ResilientJsonStore.LoadAsync(
+        TodoWidgetData data = await ResilientJsonStore.LoadAsync(
             _storePath,
             json => Normalize(JsonSerializer.Deserialize(
                 json,
                 TodoJsonContext.Default.StoreData)),
             () => new TodoWidgetData(),
             nameof(TodoWidgetStore));
+
+        // 先和另一台合并（以最后修改的为准），有变化才回写本地。
+        try
+        {
+            string current = JsonSerializer.Serialize(data, TodoJsonContext.Default.StoreData);
+            string? merged = ItemSyncBridge.MergeOnLoad(_collectionKey, current);
+            if (merged is not null)
+            {
+                data = Normalize(JsonSerializer.Deserialize(
+                    merged,
+                    TodoJsonContext.Default.StoreData));
+                await ResilientJsonStore.SaveAsync(_storePath, merged);
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log("[TodoStore] sync merge failed: " + ex.Message);
+        }
+
+        return data;
     }
 
     public Task SaveAsync(TodoWidgetData data)
     {
         data = Normalize(data);
-        // Stream the UTF-8 directly into the temp file instead of paying the
-        // transient whole-document string on every save.
-        return ResilientJsonStore.SaveAsync(
-            _storePath,
-            async tempPath =>
-            {
-                await using var stream = new FileStream(
-                    tempPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None);
-                await JsonSerializer.SerializeAsync(
-                    stream,
-                    data,
-                    TodoJsonContext.Default.StoreData);
-            });
+        // 写之前先和另一台合并，再把合并结果同时写进本地库和共享镜像。
+        string json = JsonSerializer.Serialize(data, TodoJsonContext.Default.StoreData);
+        json = ItemSyncBridge.MergeOnSave(_collectionKey, json);
+        return ResilientJsonStore.SaveAsync(_storePath, json);
     }
 
     private static TodoWidgetData Normalize(TodoWidgetData? data)
