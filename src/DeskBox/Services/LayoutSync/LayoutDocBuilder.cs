@@ -81,7 +81,7 @@ internal static class LayoutDocBuilder
                 entry["style"] = style.DeepClone();
             }
 
-            array.Add(entry);
+            array.Add((JsonNode)entry);
         }
 
         // 本机已不存在的格子 → 墓碑。不能靠「对面没有这条」推断删除：
@@ -106,7 +106,7 @@ internal static class LayoutDocBuilder
 
         foreach ((string key, DateTimeOffset at) in state.DeadKeys)
         {
-            deleted.Add(new JsonObject { ["key"] = key, ["deletedAt"] = at });
+            deleted.Add((JsonNode)new JsonObject { ["key"] = key, ["deletedAt"] = at });
         }
 
         JsonObject doc = new()
@@ -153,7 +153,7 @@ internal static class LayoutDocBuilder
         {
             if (keys.TryGetValue(id, out string? key) && key.Length > 0)
             {
-                capsule.Add(key);
+                capsule.Add((JsonNode?)JsonValue.Create(key));
             }
         }
 
