@@ -766,7 +766,7 @@ $bmp.Dispose()
         try
         {
             _drawerCountdownEnd = DateTimeOffset.Now + duration;
-            _drawerCountdownTimer ??= this.DispatcherQueue.CreateTimer();
+            _drawerCountdownTimer ??= Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
             _drawerCountdownTimer.Interval = TimeSpan.FromSeconds(1);
             _drawerCountdownTimer.IsRepeating = true;
             _drawerCountdownTimer.Tick -= DrawerCountdownTick;
