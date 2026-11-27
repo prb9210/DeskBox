@@ -13,11 +13,24 @@ public class DrawerFanSectorHitTests
     [Fact]
     public void FirstSectorSitsAtTwelveOClockAndTheRestGoClockwise()
     {
-        Assert.Equal("stage", DrawerFanActions.All[0].Id);
+        // 扇片 0 在正上方；1.9.0 起第一个扇片是「扫描」，球心仍落回「暂存」。
+        Assert.Equal("scan", DrawerFanActions.All[0].Id);
         Assert.Equal(0, DrawerFanActions.IndexAt(-90, 4)); // 正上
         Assert.Equal(1, DrawerFanActions.IndexAt(0, 4));   // 正右
         Assert.Equal(2, DrawerFanActions.IndexAt(90, 4));  // 正下
         Assert.Equal(3, DrawerFanActions.IndexAt(180, 4)); // 正左
+    }
+
+    [Fact]
+    public void SectorIdsAreUniqueAndTheImageOneComesFirst()
+    {
+        var ids = new System.Collections.Generic.HashSet<string>();
+        foreach (DrawerFanAction action in DrawerFanActions.All)
+        {
+            Assert.True(ids.Add(action.Id), "duplicate sector id: " + action.Id);
+        }
+
+        Assert.True(DrawerFanActions.Find("scan")?.AcceptsFiles ?? false);
     }
 
     [Theory]
