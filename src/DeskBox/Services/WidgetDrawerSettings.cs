@@ -288,6 +288,9 @@ public sealed class WidgetDrawerSettings
         Shortcuts = other.Shortcuts;
         Phrases = other.Phrases;
         StagingDir = other.StagingDir;
+        // 设置页的「格子显示」勾选写的就是这份列表，必须跟着 disk 走一遍，
+        // 否则主进程还是旧列表，勾了也不生效。
+        CollapsedWidgetIds = other.CollapsedWidgetIds;
     }
 
     public DrawerGlassPreset ResolveGlass()

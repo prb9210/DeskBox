@@ -142,6 +142,15 @@
                              LostFocus="DrawerText_LostFocus" />
                 </Grid>
 
+                <StackPanel Spacing="4">
+                    <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
+                               Text="桌面格子：勾选要在桌面上显示的格子。悬浮球扇片已改成功能菜单（暂存／待定／整理／截图），不再负责开关格子。"
+                               TextWrapping="Wrap" />
+                    <StackPanel x:Name="DrawerWidgetsPanel" Spacing="2" />
+                    <TextBlock x:Name="DrawerWidgetsEmpty" Style="{StaticResource SettingDescriptionTextStyle}"
+                               Text="还没有创建任何格子。" Visibility="Collapsed" />
+                </StackPanel>
+
                 <StackPanel x:Name="DrawerCustomPanel" Spacing="6" Visibility="Collapsed">
                     <Grid ColumnSpacing="16" RowSpacing="6">
                         <Grid.ColumnDefinitions>

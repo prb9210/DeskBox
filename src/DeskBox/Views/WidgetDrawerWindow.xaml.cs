@@ -66,6 +66,16 @@ public sealed partial class WidgetDrawerWindow : Window
     private PointInt32 _pressWindowOrigin;
     private double _scale = 1.0;
 
+    // 扇片不再开关格子：它们是拖放目标。拖拽进来时展开整圈，松手按落点
+    // （角度 + 半径）决定动作，而不是依赖 DragOver 有没有及时到达 ——
+    // OLE 拖放中途改变窗口尺寸时，命中测试可能不会立刻重跑。
+    private bool _dragActive;
+    private bool _expandedForDrag;
+    private string? _hoverActionId;
+    private readonly List<FanSectorVisual> _sectorVisuals = new();
+
+    private sealed record FanSectorVisual(string Id, XamlPath Path, TextBlock Label);
+
     // 1.6.0: the collapsed geometry is per-shape instead of two constants.
     private double _ballW = WidgetDrawerSettings.DefaultBallDiameter;
     private double _ballH = WidgetDrawerSettings.DefaultBallDiameter;
@@ -936,7 +946,7 @@ public sealed partial class WidgetDrawerWindow : Window
 
             panel.Children.Add(new TextBlock
             {
-                Text = "左键展开格子　右键菜单　拖文件到这里暂存",
+                Text = "左键展开功能　拖文件到扇片　右键更多",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromArgb(180, 120, 120, 120)),
                 Margin = new Thickness(0, 3, 0, 0)
@@ -955,69 +965,93 @@ public sealed partial class WidgetDrawerWindow : Window
     private void BuildFan()
     {
         FanCanvas.Children.Clear();
-        if (Application.Current is not App app)
+        _sectorVisuals.Clear();
+        _hoverActionId = null;
+
+        IReadOnlyList<DrawerFanAction> actions = DrawerFanActions.All;
+        if (actions.Count == 0)
         {
             return;
         }
 
-        IReadOnlyList<(string Id, string Name, bool Visible)> states = app.DrawerWidgetStates();
-        if (states.Count == 0)
-        {
-            return;
-        }
-
-        int count = states.Count;
+        int count = actions.Count;
         double step = 360.0 / count;
         double span = Math.Max(8, step - FanGapDegrees);
 
         for (int i = 0; i < count; i++)
         {
-            (string id, string name, bool visible) = states[i];
+            DrawerFanAction action = actions[i];
             double mid = -90 + (step * (i + 0.5));
+            // 拖拽进行中：不接受文件的扇片暗下去，一眼看出能往哪放。
+            bool active = !_dragActive || action.AcceptsFiles;
 
             var sector = new XamlPath
             {
                 Data = BuildSector(mid - (span / 2), mid + (span / 2)),
-                Fill = BuildSectorBrush(mid, visible),
+                Fill = BuildSectorBrush(mid, active),
                 Stroke = new SolidColorBrush(Color.FromArgb(48, 255, 255, 255)),
                 StrokeThickness = 1,
-                Tag = id
+                Tag = action.Id
             };
 
-            Brush hoverFill = BuildSectorBrush(mid, true, hovered: true);
-            Brush restingFill = sector.Fill;
-            sector.PointerEntered += (_, _) =>
-            {
-                sector.Fill = hoverFill;
-                sector.Stroke = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255));
-                sector.StrokeThickness = 1.5;
-            };
-            sector.PointerExited += (_, _) =>
-            {
-                sector.Fill = restingFill;
-                sector.Stroke = new SolidColorBrush(Color.FromArgb(48, 255, 255, 255));
-                sector.StrokeThickness = 1;
-            };
+            sector.PointerEntered += (_, _) => HighlightFanSector(action.Id);
+            sector.PointerExited += (_, _) => HighlightFanSector(null);
 
-            string widgetId = id;
+            DrawerFanAction captured = action;
             sector.Tapped += async (_, args) =>
             {
                 args.Handled = true;
-                await app.ToggleWidgetAsync(widgetId);
-                BuildFan();
-                UpdateStateDot();
+                await RunFanActionAsync(captured);
             };
 
             FanCanvas.Children.Add(sector);
-            AddSectorLabel(mid, name, visible);
+            TextBlock label = AddSectorLabel(mid, action.Title, active);
+            _sectorVisuals.Add(new FanSectorVisual(action.Id, sector, label));
         }
     }
 
-    private void AddSectorLabel(double degrees, string text, bool visible)
+    /// <summary>悬停/拖拽时只改填色与描边，不重建几何（DragOver 一秒能来几十次）。</summary>
+    private void HighlightFanSector(string? id)
     {
-        // Labels run along their own wedge (radially), so a long folder name can
-        // never spill over the neighbouring sector. The half on the left is
-        // rotated 180 more so the characters stay upright.
+        if (string.Equals(_hoverActionId, id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _hoverActionId = id;
+        int count = _sectorVisuals.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        double step = 360.0 / count;
+        for (int i = 0; i < count; i++)
+        {
+            FanSectorVisual visual = _sectorVisuals[i];
+            DrawerFanAction? action = DrawerFanActions.Find(visual.Id);
+            if (action is null)
+            {
+                continue;
+            }
+
+            double mid = -90 + (step * (i + 0.5));
+            bool active = !_dragActive || action.AcceptsFiles;
+            bool hovered = string.Equals(visual.Id, id, StringComparison.Ordinal);
+            visual.Path.Fill = BuildSectorBrush(mid, active, hovered);
+            visual.Path.Stroke = new SolidColorBrush(Color.FromArgb(
+                hovered ? (byte)235 : active ? (byte)48 : (byte)22, 255, 255, 255));
+            visual.Path.StrokeThickness = hovered ? 2 : 1;
+            visual.Label.Foreground = new SolidColorBrush(Color.FromArgb(
+                hovered || active ? (byte)255 : (byte)120, 255, 255, 255));
+        }
+    }
+
+    private TextBlock AddSectorLabel(double degrees, string text, bool active)
+    {
+        // Labels run along their own wedge (radially), so a long name can never
+        // spill over the neighbouring sector. The half on the left is rotated
+        // 180 more so the characters stay upright.
         double radius = (_fanInner + _fanOuter) / 2;
         double rad = degrees * Math.PI / 180;
         double x = _centerX + (radius * Math.Cos(rad));
@@ -1030,9 +1064,9 @@ public sealed partial class WidgetDrawerWindow : Window
         var label = new TextBlock
         {
             Text = text,
-            FontSize = 12,
+            FontSize = 13,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)185, 255, 255, 255)),
+            Foreground = new SolidColorBrush(Color.FromArgb(active ? (byte)255 : (byte)120, 255, 255, 255)),
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1043,24 +1077,9 @@ public sealed partial class WidgetDrawerWindow : Window
         };
 
         Canvas.SetLeft(label, x - (span / 2));
-        Canvas.SetTop(label, y - 9);
+        Canvas.SetTop(label, y - 10);
         FanCanvas.Children.Add(label);
-
-        double dotRadius = _fanOuter - 16;
-        double dotX = _centerX + (dotRadius * Math.Cos(rad));
-        double dotY = _centerY + (dotRadius * Math.Sin(rad));
-
-        var dot = new Border
-        {
-            Width = 6,
-            Height = 6,
-            CornerRadius = new CornerRadius(3),
-            Background = new SolidColorBrush(Color.FromArgb(visible ? (byte)255 : (byte)80, 255, 255, 255)),
-            IsHitTestVisible = false
-        };
-        Canvas.SetLeft(dot, dotX - 3);
-        Canvas.SetTop(dot, dotY - 3);
-        FanCanvas.Children.Add(dot);
+        return label;
     }
 
     private Brush BuildSectorBrush(double directionDegrees, bool visible, bool hovered = false)
@@ -1143,6 +1162,16 @@ public sealed partial class WidgetDrawerWindow : Window
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         StopIdleTimer();
+        if (_dragActive)
+        {
+            // 拖拽可能在窗口外被取消，那样不会再有 Drop；回到正常外观。
+            _dragActive = false;
+            if (_expanded)
+            {
+                BuildFan();
+            }
+        }
+
         if (!_expanded)
         {
             Animate(BallLayer, 1.0);
@@ -1404,23 +1433,54 @@ public sealed partial class WidgetDrawerWindow : Window
         }
     }
 
-    // -------------------------------------------------------------------- drop
+    // -------------------------------------------------------------- drag/drop
+
+    /// <summary>
+    /// Dragging files onto the bead opens the ring so the file can be aimed at
+    /// a sector. Drop is authoritative (the pointer position is read there),
+    /// DragOver only paints the highlight — resizing a window in the middle of
+    /// an OLE drag is not guaranteed to be re-hit-tested by the shell.
+    /// </summary>
+    private void RootGrid_DragEnter(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        _dragActive = true;
+        if (!_expanded)
+        {
+            _expandedForDrag = true;
+            SetExpanded(true);
+        }
+
+        BuildFan();
+    }
 
     private void RootGrid_DragOver(object sender, DragEventArgs e)
     {
-        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
         {
-            e.AcceptedOperation = DataPackageOperation.Copy;
-            try
-            {
-                e.DragUIOverride.Caption = "暂存到「资料库\\_暂存」";
-                e.DragUIOverride.IsCaptionVisible = true;
-                e.DragUIOverride.IsGlyphVisible = true;
-            }
-            catch (Exception)
-            {
-                // DragUIOverride is best-effort on some shells.
-            }
+            return;
+        }
+
+        e.AcceptedOperation = DataPackageOperation.Copy;
+
+        Windows.Foundation.Point point = e.GetPosition(RootGrid);
+        string? actionId = SectorAtPoint(point);
+        HighlightFanSector(actionId);
+
+        DrawerFanAction action = DrawerFanActions.Find(actionId) ?? DrawerFanActions.Default;
+        try
+        {
+            e.DragUIOverride.Caption = "松手：" + action.Hint;
+            e.DragUIOverride.IsCaptionVisible = true;
+            e.DragUIOverride.IsGlyphVisible = true;
+        }
+        catch (Exception)
+        {
+            // DragUIOverride is best-effort on some shells.
         }
     }
 
@@ -1430,6 +1490,12 @@ public sealed partial class WidgetDrawerWindow : Window
         {
             return;
         }
+
+        Windows.Foundation.Point dropPoint = e.GetPosition(RootGrid);
+        DrawerFanAction action = DrawerFanActions.Find(SectorAtPoint(dropPoint)) ?? DrawerFanActions.Default;
+        bool wasExpandedForDrag = _expandedForDrag;
+        _dragActive = false;
+        _expandedForDrag = false;
 
         try
         {
@@ -1448,22 +1514,142 @@ public sealed partial class WidgetDrawerWindow : Window
                 return;
             }
 
-            if (Application.Current is App app)
-            {
-                (int moved, string message) = await app.StageFilesAsync(paths);
-                if (moved > 0)
-                {
-                    Animate(BallLayer, 1.0);
-                }
-
-                App.Log($"[Drawer] staging dropped {moved}/{paths.Count}: {message}");
-                _ = RefreshBadgeAsync();
-            }
+            await ExecuteFanActionAsync(action, paths);
+            App.Log($"[Drawer] drop {paths.Count} → {action.Id}");
+            _ = RefreshBadgeAsync();
         }
         catch (Exception ex)
         {
             App.Log($"[Drawer] drop failed: {ex.Message}");
+            (Application.Current as App)?.FlashDrawerGlyph("!", "处理失败", ex.Message);
         }
+        finally
+        {
+            if (wasExpandedForDrag && _expanded)
+            {
+                SetExpanded(false);
+            }
+            else if (_expanded)
+            {
+                BuildFan();
+            }
+        }
+    }
+
+    private async System.Threading.Tasks.Task RunFanActionAsync(DrawerFanAction action)
+    {
+        await ExecuteFanActionAsync(action, Array.Empty<string>());
+        if (_expanded)
+        {
+            SetExpanded(false);
+        }
+    }
+
+    private async System.Threading.Tasks.Task ExecuteFanActionAsync(
+        DrawerFanAction action,
+        IReadOnlyList<string> paths)
+    {
+        if (Application.Current is not App app)
+        {
+            return;
+        }
+
+        switch (action.Kind)
+        {
+            case DrawerFanKind.Stage:
+                if (paths.Count > 0)
+                {
+                    await app.StageFilesAsync(paths);
+                }
+                else
+                {
+                    await app.OpenDrawerStagingAsync();
+                }
+
+                break;
+
+            case DrawerFanKind.Pending:
+                if (paths.Count > 0)
+                {
+                    await app.FileDrawerToPendingAsync(paths);
+                }
+                else
+                {
+                    await app.OpenDrawerPendingAsync();
+                }
+
+                break;
+
+            case DrawerFanKind.Organize:
+                // 整理的是整张桌面；真有文件被投到这里就先暂存，别让用户白拖。
+                if (paths.Count > 0)
+                {
+                    await app.StageFilesAsync(paths);
+                }
+                else
+                {
+                    await app.RunDrawerOrganizeAsync();
+                }
+
+                break;
+
+            case DrawerFanKind.Screenshot:
+                await app.CaptureDrawerScreenshotAsync();
+                break;
+        }
+    }
+
+    /// <summary>扇片命中：与绘制同一坐标系（292 DIP 画布 + 等比缩放），用角度 + 半径判定。</summary>
+    private string? SectorAtPoint(Windows.Foundation.Point point)
+    {
+        IReadOnlyList<DrawerFanAction> actions = DrawerFanActions.All;
+        if (actions.Count == 0)
+        {
+            return null;
+        }
+
+        double side = _layoutDiameterDip > 0 ? _layoutDiameterDip : ExpandedSize;
+        double fanScale = Math.Clamp(side / ExpandedSize, 0.4, 1.0);
+        double dx = (point.X - (RootGrid.ActualWidth / 2)) / fanScale;
+        double dy = (point.Y - (RootGrid.ActualHeight / 2)) / fanScale;
+        double distance = Math.Sqrt((dx * dx) + (dy * dy));
+        if (distance < FanInner || distance > FanOuter + 16)
+        {
+            return null;
+        }
+
+        double degrees = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        double step = 360.0 / actions.Count;
+        int best = -1;
+        double bestDelta = double.MaxValue;
+        for (int i = 0; i < actions.Count; i++)
+        {
+            double mid = -90 + (step * (i + 0.5));
+            double delta = Math.Abs(NormalizeDegrees(degrees - mid));
+            if (delta < bestDelta)
+            {
+                bestDelta = delta;
+                best = i;
+            }
+        }
+
+        return best >= 0 && bestDelta <= (step / 2) ? actions[best].Id : null;
+    }
+
+    private static double NormalizeDegrees(double value)
+    {
+        value %= 360;
+        if (value > 180)
+        {
+            value -= 360;
+        }
+
+        if (value < -180)
+        {
+            value += 360;
+        }
+
+        return value;
     }
 
     // ------------------------------------------------------------------- menu

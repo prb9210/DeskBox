@@ -153,6 +153,9 @@ public partial class App
             CloseWidgetDrawer();
         }
 
+        // 设置页刚改了「格子显示」：把 drawer.json 的收起列表真正落到桌面上。
+        _ = ApplyDrawerParkedStateAsync();
+
         ApplyDrawerFullScreenWatch();
     }
 
@@ -240,6 +243,8 @@ public partial class App
         if (manager.HasVisibleWidgets)
         {
             await manager.SetAllWidgetsVisibleAsync(false);
+            // 设置页的勾选状态读的就是这份列表：全部收起时也要写进去。
+            RecordAllWidgetsCollapsed();
         }
         else
         {

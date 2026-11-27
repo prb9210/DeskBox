@@ -782,6 +782,7 @@ public sealed partial class CompanionSettingsSection : UserControl
 
             DrawerShortcutsBox.Text = string.Join(Environment.NewLine, shortcutLines);
             DrawerPhrasesBox.Text = string.Join(Environment.NewLine, _drawerDraft.Phrases);
+            BuildDrawerWidgetList();
             DrawerCustomPanel.Visibility = _drawerDraft.Glass == "custom"
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -803,6 +804,56 @@ public sealed partial class CompanionSettingsSection : UserControl
         DrawerOpacityValue.Text = (int)Math.Round(DrawerOpacitySlider.Value) + "%";
         DrawerHighlightValue.Text = (int)Math.Round(DrawerHighlightSlider.Value) + "%";
         DrawerRimValue.Text = (int)Math.Round(DrawerRimSlider.Value) + "%";
+    }
+
+    /// <summary>
+    /// 格子显示开关搬到设置里（扇片改成功能菜单后，开关在球上就没了）。
+    /// 真相是 drawer.json 的 CollapsedWidgetIds：写盘后经 drawer-reload 让主进程
+    /// 逐格 SetWidgetVisibleAsync，双向收敛。
+    /// </summary>
+    private void BuildDrawerWidgetList()
+    {
+        DrawerWidgetsPanel.Children.Clear();
+        if (_drawerDraft is null)
+        {
+            return;
+        }
+
+        var settings = global::DeskBox.App.Current.SettingsService.Settings;
+        int count = 0;
+        foreach (global::DeskBox.Models.WidgetConfig widget in settings.Widgets)
+        {
+            if (widget.IsDisabled || settings.DeletedWidgetIds.Contains(widget.Id))
+            {
+                continue;
+            }
+
+            var check = new CheckBox
+            {
+                Content = string.IsNullOrWhiteSpace(widget.Name) ? widget.Id : widget.Name,
+                Tag = widget.Id,
+                IsChecked = !_drawerDraft.CollapsedWidgetIds.Contains(widget.Id),
+                FontSize = 12
+            };
+            check.Checked += DrawerWidgetCheck_Changed;
+            check.Unchecked += DrawerWidgetCheck_Changed;
+            DrawerWidgetsPanel.Children.Add(check);
+            count++;
+        }
+
+        DrawerWidgetsEmpty.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void DrawerWidgetCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_drawerLoading || _drawerDraft is null || sender is not CheckBox check ||
+            check.Tag is not string widgetId)
+        {
+            return;
+        }
+
+        _drawerDraft.SetCollapsed(widgetId, check.IsChecked != true);
+        _ = ApplyDrawerSettingsAsync();
     }
 
     private void DrawerCheck_Changed(object sender, RoutedEventArgs e) =>

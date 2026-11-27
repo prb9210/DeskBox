@@ -13,6 +13,7 @@
         x:Name="RootGrid"
         Background="Transparent"
         AllowDrop="True"
+        DragEnter="RootGrid_DragEnter"
         DragOver="RootGrid_DragOver"
         Drop="RootGrid_Drop"
         PointerEntered="RootGrid_PointerEntered"
