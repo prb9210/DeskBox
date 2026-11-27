@@ -36,10 +36,10 @@ internal static class ItemSyncBridge
         "item-sync-state.json");
 
     /// <summary>
-    /// 读本地文件之前调用：先并进镜像再返回本地应得的内容。返回 null 表示
-    /// 无需改写本地文件。
+    /// 读本地文件时调用：并进镜像里的另一台内容，返回本机该看到的内容。
+    /// 不补墓碑、不写本地文件（写盘由调用方或 SyncFile 负责）。
     /// </summary>
-    public static string? MergeOnLoad(string key, string localJson)
+    public static string MergeText(string key, string localJson)
     {
         try
         {
@@ -49,29 +49,40 @@ internal static class ItemSyncBridge
                 WriteMirror(key, result.RemoteJson);
             }
 
-            return result.LocalChanged ? result.LocalJson : null;
-        }
-        catch (Exception ex)
-        {
-            App.Log("[ItemSync] merge-on-load failed: " + ex.Message);
-            return null;
-        }
-    }
-
-    /// <summary>写本地文件之前调用：并把最终内容写进镜像，返回应落盘的 JSON。</summary>
-    public static string MergeOnSave(string key, string localJson)
-    {
-        try
-        {
-            MergeResult result = MergeCore(key, localJson, synthesiseDeletions: true);
-            WriteMirror(key, result.RemoteJson);
-            RememberSeen(key, result.RemoteJson);
             return result.LocalJson;
         }
         catch (Exception ex)
         {
-            App.Log("[ItemSync] merge-on-save failed: " + ex.Message);
+            App.Log("[ItemSync] merge failed: " + ex.Message);
             return localJson;
+        }
+    }
+
+    /// <summary>
+    /// 本地文件刚写完之后调用：再合并一次（拉回对端更新的条目）、给本机删掉
+    /// 的条目补墓碑、并把成果写回本地文件和共享镜像。
+    /// </summary>
+    public static void SyncFile(string key, string path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(LibraryRoot) || !File.Exists(path))
+            {
+                return;
+            }
+
+            string localJson = File.ReadAllText(path);
+            MergeResult result = MergeCore(key, localJson, synthesiseDeletions: true);
+            WriteMirror(key, result.RemoteJson);
+            RememberSeen(key, result.RemoteJson);
+            if (result.LocalChanged)
+            {
+                File.WriteAllText(path, result.LocalJson);
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log("[ItemSync] sync-after-save failed: " + ex.Message);
         }
     }
 

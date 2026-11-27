@@ -51,44 +51,40 @@ public sealed class QuickCaptureStore
 
     public async Task<QuickCaptureStoreData> LoadAsync()
     {
-        QuickCaptureStoreData data = await ResilientJsonStore.LoadAsync(
+        return await ResilientJsonStore.LoadAsync(
             _storePath,
+            // 读盘时先和另一台合并：以最后修改时间为准。
             json => Normalize(JsonSerializer.Deserialize(
-                json,
+                ItemSyncBridge.MergeText(CollectionKey, json),
                 QuickCaptureJsonContext.Default.StoreData)),
             () => new QuickCaptureStoreData(),
             nameof(QuickCaptureStore));
-
-        try
-        {
-            string current = JsonSerializer.Serialize(
-                data,
-                QuickCaptureJsonContext.Default.StoreData);
-            string? merged = ItemSyncBridge.MergeOnLoad(CollectionKey, current);
-            if (merged is not null)
-            {
-                data = Normalize(JsonSerializer.Deserialize(
-                    merged,
-                    QuickCaptureJsonContext.Default.StoreData));
-                await ResilientJsonStore.SaveAsync(_storePath, merged);
-            }
-        }
-        catch (Exception ex)
-        {
-            App.Log("[QuickCaptureStore] sync merge failed: " + ex.Message);
-        }
-
-        return data;
     }
 
-    public Task SaveAsync(QuickCaptureStoreData data)
+    public async Task SaveAsync(QuickCaptureStoreData data)
     {
         data = Normalize(data);
-        // 保存前先和另一台合并（逐条、以最后修改的为准）。quick-capture 的
-        // 自动保存很频繁，但文档只有几十 KB，整篇字符串的代价可以接受。
-        string json = JsonSerializer.Serialize(data, QuickCaptureJsonContext.Default.StoreData);
-        json = ItemSyncBridge.MergeOnSave(CollectionKey, json);
-        return ResilientJsonStore.SaveAsync(_storePath, json);
+        // Stream the UTF-8 directly into the temp file: materializing the
+        // whole document as a string first doubles the transient footprint
+        // on every save, and quick-capture autosave fires while the user
+        // keeps typing.
+        await ResilientJsonStore.SaveAsync(
+            _storePath,
+            async tempPath =>
+            {
+                await using var stream = new FileStream(
+                    tempPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None);
+                await JsonSerializer.SerializeAsync(
+                    stream,
+                    data,
+                    QuickCaptureJsonContext.Default.StoreData);
+            });
+
+        // 落盘后再合并：拉回另一台更新的条目，并给本机删掉的条目补墓碑。
+        ItemSyncBridge.SyncFile(CollectionKey, _storePath);
     }
 
     /// <summary>共享镜像的键：随手记只有一份库，两台共用一个文件。</summary>
