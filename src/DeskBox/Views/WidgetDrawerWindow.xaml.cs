@@ -981,7 +981,7 @@ public sealed partial class WidgetDrawerWindow : Window
         for (int i = 0; i < count; i++)
         {
             DrawerFanAction action = actions[i];
-            double mid = -90 + (step * (i + 0.5));
+            double mid = DrawerFanActions.MidAngle(i, count);
             // 拖拽进行中：不接受文件的扇片暗下去，一眼看出能往哪放。
             bool active = !_dragActive || action.AcceptsFiles;
 
@@ -1025,7 +1025,6 @@ public sealed partial class WidgetDrawerWindow : Window
             return;
         }
 
-        double step = 360.0 / count;
         for (int i = 0; i < count; i++)
         {
             FanSectorVisual visual = _sectorVisuals[i];
@@ -1035,7 +1034,7 @@ public sealed partial class WidgetDrawerWindow : Window
                 continue;
             }
 
-            double mid = -90 + (step * (i + 0.5));
+            double mid = DrawerFanActions.MidAngle(i, count);
             bool active = !_dragActive || action.AcceptsFiles;
             bool hovered = string.Equals(visual.Id, id, StringComparison.Ordinal);
             visual.Path.Fill = BuildSectorBrush(mid, active, hovered);
@@ -1619,37 +1618,8 @@ public sealed partial class WidgetDrawerWindow : Window
         }
 
         double degrees = Math.Atan2(dy, dx) * 180.0 / Math.PI;
-        double step = 360.0 / actions.Count;
-        int best = -1;
-        double bestDelta = double.MaxValue;
-        for (int i = 0; i < actions.Count; i++)
-        {
-            double mid = -90 + (step * (i + 0.5));
-            double delta = Math.Abs(NormalizeDegrees(degrees - mid));
-            if (delta < bestDelta)
-            {
-                bestDelta = delta;
-                best = i;
-            }
-        }
-
-        return best >= 0 && bestDelta <= (step / 2) ? actions[best].Id : null;
-    }
-
-    private static double NormalizeDegrees(double value)
-    {
-        value %= 360;
-        if (value > 180)
-        {
-            value -= 360;
-        }
-
-        if (value < -180)
-        {
-            value += 360;
-        }
-
-        return value;
+        int index = DrawerFanActions.IndexAt(degrees, actions.Count);
+        return index >= 0 && index < actions.Count ? actions[index].Id : null;
     }
 
     // ------------------------------------------------------------------- menu

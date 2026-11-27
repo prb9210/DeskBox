@@ -50,6 +50,27 @@ public static class DrawerFanActions
     /// which is what the ball did before sectors existed.</summary>
     public static DrawerFanAction Default => All[0];
 
+    /// <summary>扇片 0 在正上方，其余顺时针排（与扇片的绘制角度同一套坐标）。</summary>
+    public static double MidAngle(int index, int count) =>
+        count <= 0 ? 0 : -90 + ((360.0 / count) * index);
+
+    /// <summary>
+    /// 角度 → 扇片序号。单独抽出来是为了能在 Linux 上跑单测：拖放命中
+    /// 只看「松手时的角度 + 半径」，与窗口、DPI、扇片视觉都无关。
+    /// </summary>
+    public static int IndexAt(double degrees, int count)
+    {
+        if (count <= 0)
+        {
+            return -1;
+        }
+
+        double step = 360.0 / count;
+        double fromTop = (((degrees + 90) % 360) + 360) % 360;
+        int index = (int)Math.Floor((fromTop + (step / 2)) / step);
+        return ((index % count) + count) % count;
+    }
+
     public static DrawerFanAction? Find(string? id)
     {
         if (string.IsNullOrEmpty(id))
