@@ -168,7 +168,7 @@ internal static class LayoutApplier
             {
                 JsonNode? node = JsonNode.Parse(shell.GetRawText());
                 if (node is JsonObject shellObject &&
-                    ShellStyleApplier.Apply(settings, shellObject) > 0)
+                    ShellStyleApplier.Apply(appSettings, shellObject) > 0)
                 {
                     state.ShellSignature = shellObject.ToJsonString();
                     state.ShellAt = shellAt;
