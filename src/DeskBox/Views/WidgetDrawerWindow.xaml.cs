@@ -132,6 +132,7 @@ public sealed partial class WidgetDrawerWindow : Window
             EnsureWindowPixels();
             Relayout();
             ApplyWindowClip();
+            UpdateCountdownGlyph();
             StartBadgeTimer();
             _ = RefreshBadgeAsync();
         };
@@ -773,6 +774,28 @@ public sealed partial class WidgetDrawerWindow : Window
         ApplyWindowClip();
         ShowAtSavedSpot();
         _ = RefreshBadgeAsync();
+    }
+
+    /// <summary>全屏应用（投影/视频）在前台时把球藏起来——是隐藏窗口，不是关掉。</summary>
+    public void SetTemporarilyHidden(bool hidden)
+    {
+        try
+        {
+            AppWindow appWindow = GetAppWindow();
+            if (hidden)
+            {
+                appWindow.Hide();
+                return;
+            }
+
+            appWindow.Show();
+            Activate();
+            ApplyWindowClip();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"[Drawer] temporary hide failed: {ex.Message}");
+        }
     }
 
     private void Animate(UIElement target, double to)

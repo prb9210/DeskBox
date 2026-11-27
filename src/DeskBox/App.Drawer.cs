@@ -32,6 +32,8 @@ public partial class App
     private string? _drawerLibrary;
     private DispatcherQueueTimer? _drawerCountdownTimer;
     private DateTimeOffset _drawerCountdownEnd;
+    private DispatcherQueueTimer? _drawerFullScreenTimer;
+    private bool _drawerHiddenForFullscreen;
 
     /// <summary>True when no widget is currently on the desktop.</summary>
     internal bool WidgetsParked => WidgetManager is { } manager && !manager.HasVisibleWidgets;
@@ -148,6 +150,8 @@ public partial class App
         {
             CloseWidgetDrawer();
         }
+
+        ApplyDrawerFullScreenWatch();
     }
 
     private void RegisterDrawerHotkey(IntPtr windowHandle)
@@ -194,6 +198,7 @@ public partial class App
             ShowWidgetDrawer();
         }
 
+        ApplyDrawerFullScreenWatch();
         _ = ApplyParkedWidgetsAsync();
     }
 
@@ -697,6 +702,47 @@ $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose()
 $bmp.Dispose()
 """;
+
+    // ----------------------------------------------------------- fullscreen
+
+    /// <summary>「全屏时自动隐藏」：3 秒看一次前台窗口，进出全屏时隐藏/恢复球。</summary>
+    private void ApplyDrawerFullScreenWatch()
+    {
+        try
+        {
+            _drawerFullScreenTimer?.Stop();
+            _drawerFullScreenTimer = null;
+            _drawerHiddenForFullscreen = false;
+
+            if (!DrawerSettings.AutoHideFullScreen || !DrawerSettings.Visible)
+            {
+                return;
+            }
+
+            _drawerFullScreenTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
+            _drawerFullScreenTimer.Interval = TimeSpan.FromSeconds(3);
+            _drawerFullScreenTimer.IsRepeating = true;
+            _drawerFullScreenTimer.Tick -= DrawerFullScreenTick;
+            _drawerFullScreenTimer.Tick += DrawerFullScreenTick;
+            _drawerFullScreenTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            Log($"[Drawer] fullscreen watch failed: {ex.Message}");
+        }
+    }
+
+    private void DrawerFullScreenTick(DispatcherQueueTimer sender, object args)
+    {
+        bool fullscreen = Platform.ForegroundFullscreen.IsForegroundFullscreen();
+        if (fullscreen == _drawerHiddenForFullscreen)
+        {
+            return;
+        }
+
+        _drawerHiddenForFullscreen = fullscreen;
+        _widgetDrawerWindow?.SetTemporarilyHidden(fullscreen);
+    }
 
     // -------------------------------------------------------------- countdown
 
