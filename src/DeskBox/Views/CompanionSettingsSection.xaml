@@ -144,7 +144,7 @@
 
                 <StackPanel Spacing="4">
                     <TextBlock Style="{StaticResource SettingDescriptionTextStyle}"
-                               Text="桌面格子：勾选要在桌面上显示的格子。悬浮球扇片已改成功能菜单（暂存／待定／整理／截图），不再负责开关格子。"
+                               Text="桌面格子：勾选要在桌面上显示的格子。悬浮球扇片已改成功能菜单（暂存／待定／整理／截图），不再负责开关格子。想单独设某个格子常开 / 常收：在桌面上右键该格子 → 收起方式（跟随全局 / 常开 / 点击展开 / 智能）。"
                                TextWrapping="Wrap" />
                     <StackPanel x:Name="DrawerWidgetsPanel" Spacing="2" />
                     <TextBlock x:Name="DrawerWidgetsEmpty" Style="{StaticResource SettingDescriptionTextStyle}"
