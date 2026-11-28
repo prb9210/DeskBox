@@ -395,6 +395,26 @@
             </StackPanel>
         </Border>
 
+        <!-- ==================== 配置导出 / 导入（只走共享项） ==================== -->
+        <Border Style="{StaticResource SettingsGroupStyle}" Padding="16,12">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon Glyph="&#xE8B5;" Style="{StaticResource CompanionCardIconStyle}" />
+                    <TextBlock Text="配置导出 / 导入" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap"
+                           Text="导出的是共享项：分类表、词表、阈值、AI 非密钥参数。桌面、资料库、设备标签、备份目标（含密码）与密钥属于本机项，不导出、导入时也不改动。" />
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="ExportConfigButton" Click="ExportConfigButton_Click"
+                            Style="{StaticResource AccentActionButtonStyle}" Content="导出共享配置" />
+                    <Button x:Name="ImportConfigButton" Click="ImportConfigButton_Click" Content="导入共享配置" />
+                    <TextBlock x:Name="ConfigMessage" VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,10">
             <Button x:Name="SaveButton" Click="SaveButton_Click" Style="{StaticResource AccentActionButtonStyle}" Content="保存设置" />
             <TextBlock x:Name="SaveMessage" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap" />

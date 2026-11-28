@@ -1413,6 +1413,181 @@ public sealed partial class CompanionSettingsSection : UserControl
         }
     }
 
+    // ------------------------------------------- 配置导出 / 导入（只走共享项）
+
+    /// <summary>
+    /// 导出共享项：引擎只回分类表/词表/阈值/AI 非密钥参数，本机路径与密码
+    /// 根本不在包里。目标位置由用户选一个文件夹，文件名带时间戳避免覆盖。
+    /// </summary>
+    private async void ExportConfigButton_Click(object sender, RoutedEventArgs e)
+    {
+        ExportConfigButton.IsEnabled = false;
+        ConfigMessage.Text = "正在导出…";
+        try
+        {
+            string? dir = await FolderPickerService.PickFolderAsync(OwnerHandle);
+            if (string.IsNullOrWhiteSpace(dir))
+            {
+                ConfigMessage.Text = "已取消";
+                return;
+            }
+
+            using JsonDocument? doc = await CompanionClient.GetJsonAsync("/api/config-export");
+            if (doc is null)
+            {
+                ConfigMessage.Text = "引擎没有回应：先确认桌面管家已启动";
+                return;
+            }
+
+            string name = "DeskBox共享配置_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json";
+            string target = Path.Combine(dir, name);
+            File.WriteAllText(target, doc.RootElement.GetRawText(), new UTF8Encoding(false));
+
+            int paths = 0;
+            if (doc.RootElement.TryGetProperty("shared", out JsonElement shared) &&
+                shared.TryGetProperty("paths", out JsonElement arr) &&
+                arr.ValueKind == JsonValueKind.Array)
+            {
+                paths = arr.GetArrayLength();
+            }
+
+            ConfigMessage.Text = $"已导出 {paths} 条分类到 {target}（本机项未包含）";
+        }
+        catch (Exception ex)
+        {
+            ConfigMessage.Text = "导出失败：" + ex.Message;
+        }
+        finally
+        {
+            ExportConfigButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// 导入共享项：先让引擎在快照上试算（apply=false），把「新增/更新/保留」
+    /// 摆给用户看，确认后才 apply=true 真正并进配置。本机项一律不动。
+    /// </summary>
+    private async void ImportConfigButton_Click(object sender, RoutedEventArgs e)
+    {
+        ImportConfigButton.IsEnabled = false;
+        ConfigMessage.Text = "选择配置文件…";
+        try
+        {
+            string? path = await FileOpenPickerService.PickSingleFileAsync(
+                OwnerHandle,
+                new[] { ".json" },
+                PickerLocationId.DocumentsLibrary);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ConfigMessage.Text = "已取消";
+                return;
+            }
+
+            string text = File.ReadAllText(path);
+            JsonNode? bundle = JsonNode.Parse(text);
+            if (bundle is null)
+            {
+                ConfigMessage.Text = "这个文件不是配置包";
+                return;
+            }
+
+            var previewPayload = new JsonObject
+            {
+                ["apply"] = false,
+                ["bundle"] = bundle,
+            };
+            (bool previewOk, string previewBody) = await CompanionClient.PostJsonAsync(
+                "/api/config-import",
+                previewPayload.ToJsonString());
+            if (!previewOk)
+            {
+                ConfigMessage.Text = previewBody;
+                return;
+            }
+
+            string summary = DescribeImportReport(previewBody);
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "导入共享配置",
+                Content = new TextBlock
+                {
+                    Text = summary + "\n\n确认后写入。本机项（桌面、资料库、设备标签、备份目标、密钥）保持不变。",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "导入",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                ConfigMessage.Text = "已取消";
+                return;
+            }
+
+            // 同一个 JsonNode 不能挂到第二个父节点上，真正导入要重新解析。
+            JsonNode? applyBundle = JsonNode.Parse(text);
+            var applyPayload = new JsonObject
+            {
+                ["apply"] = true,
+                ["bundle"] = applyBundle,
+            };
+            (bool ok, string body) = await CompanionClient.PostJsonAsync(
+                "/api/config-import",
+                applyPayload.ToJsonString());
+            ConfigMessage.Text = ok
+                ? "已导入：" + DescribeImportReport(body) + "（重启 DeskBox 后按新分类生效）"
+                : body;
+        }
+        catch (JsonException)
+        {
+            ConfigMessage.Text = "这个文件不是有效的 JSON";
+        }
+        catch (Exception ex)
+        {
+            ConfigMessage.Text = "导入失败：" + ex.Message;
+        }
+        finally
+        {
+            ImportConfigButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>把引擎的 report 对象翻成一句人话；解析失败就原样退回。</summary>
+    private static string DescribeImportReport(string body)
+    {
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("report", out JsonElement report) ||
+                report.ValueKind != JsonValueKind.Object)
+            {
+                return "完成";
+            }
+
+            int add = report.TryGetProperty("paths_added", out JsonElement a) ? a.GetInt32() : 0;
+            int upd = report.TryGetProperty("paths_updated", out JsonElement u) ? u.GetInt32() : 0;
+            int kept = report.TryGetProperty("paths_kept", out JsonElement k) ? k.GetInt32() : 0;
+
+            var text = new StringBuilder();
+            text.Append($"分类：新增 {add} 条，更新 {upd} 条，保留本机 {kept} 条");
+            if (report.TryGetProperty("warnings", out JsonElement warnings) &&
+                warnings.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement item in warnings.EnumerateArray())
+                {
+                    text.Append("；").Append(item.GetString() ?? string.Empty);
+                }
+            }
+
+            return text.ToString();
+        }
+        catch (JsonException)
+        {
+            return body;
+        }
+    }
+
     /// <summary>把任意字符串变成 JSON 字面量（口令里可能有引号或反斜杠）。</summary>
     private async void ArchiveConflictsButton_Click(object sender, RoutedEventArgs e)
     {
