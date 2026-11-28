@@ -1230,14 +1230,32 @@ public sealed partial class CompanionSettingsSection : UserControl
                 ["root"] = root,
                 ["password"] = password,
             };
-            if (!backup)
+
+            // 引擎进不去 Windows 凭据管理器，坚果云应用密码只能由宿主读出来
+            // 交给它一起加密；恢复时再写回去，换机才不用重填。
+            var credentialStore = new PasswordVaultCredentialStore();
+            if (backup)
+            {
+                JsonObject? secrets = await CollectVaultSecretsAsync(credentialStore);
+                if (secrets is not null)
+                {
+                    payload["credentials"] = secrets;
+                }
+            }
+            else
             {
                 payload["apply"] = true;
             }
 
             string body = payload.ToJsonString();
             (bool ok, string message) = await CompanionClient.PostJsonAsync(path, body);
-            ProfileMessage.Text = DescribeProfileResult(ok, message, backup);
+            string text = DescribeProfileResult(ok, message, backup);
+            if (!backup && ok)
+            {
+                text += await ApplyRestoredVaultSecretsAsync(credentialStore, message);
+            }
+
+            ProfileMessage.Text = text;
         }
         finally
         {
@@ -1280,7 +1298,15 @@ public sealed partial class CompanionSettingsSection : UserControl
                 {
                     foreach (JsonElement item in applied.EnumerateArray())
                     {
-                        parts.Add(item.GetString() ?? "");
+                        string entry = item.GetString() ?? string.Empty;
+                        // 引擎写不了 Windows 凭据管理器，这类键由下面的
+                        // ApplyRestoredVaultSecretsAsync 写回，别再报「手工填写」。
+                        if (entry.EndsWith("需在设置页手工填写", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        parts.Add(entry);
                     }
                 }
 
@@ -1292,6 +1318,98 @@ public sealed partial class CompanionSettingsSection : UserControl
         catch (JsonException)
         {
             return body;
+        }
+    }
+
+    /// <summary>
+    /// 读出本机凭据管理器里 DeskBox 自己的系统凭据（坚果云应用密码等）：
+    /// 引擎碰不到 PasswordVault，只能由宿主取出后交给它一起加密。
+    /// 读不到就返回 null —— 备份照常做，只是没有系统凭据可带。
+    /// </summary>
+    private static async Task<JsonObject?> CollectVaultSecretsAsync(PasswordVaultCredentialStore store)
+    {
+        var secrets = new JsonObject();
+        try
+        {
+            foreach (string key in await store.ListKeysAsync())
+            {
+                string? secret = await store.GetSecretAsync(key);
+                if (!string.IsNullOrEmpty(secret))
+                {
+                    secrets[key] = secret;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            App.Log("[Profile] 读取系统凭据失败: " + ex.Message);
+        }
+
+        return secrets.Count == 0 ? null : secrets;
+    }
+
+    /// <summary>
+    /// 把引擎解出来的非 deepseek 凭据写回 Windows 凭据管理器（DeepSeek 密钥引擎已写
+    /// key 文件）。成功/失败都回一句话，并提示重启 DeskBox 才重新读密钥。
+    /// </summary>
+    private static async Task<string> ApplyRestoredVaultSecretsAsync(
+        PasswordVaultCredentialStore store,
+        string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("credentials", out JsonElement creds) ||
+                creds.ValueKind != JsonValueKind.Object)
+            {
+                return string.Empty;
+            }
+
+            int written = 0;
+            var failed = new List<string>();
+            foreach (JsonProperty prop in creds.EnumerateObject())
+            {
+                // deepseek 由引擎写成 companion\deepseek.key，不走凭据管理器。
+                if (string.Equals(prop.Name, "deepseek", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string? secret = prop.Value.GetString();
+                if (string.IsNullOrEmpty(secret))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await store.SetSecretAsync(prop.Name, secret);
+                    written++;
+                }
+                catch (Exception ex)
+                {
+                    failed.Add(prop.Name + " 写回失败");
+                    App.Log("[Profile] 写回凭据失败 " + prop.Name + ": " + ex.Message);
+                }
+            }
+
+            var parts = new List<string>();
+            if (written > 0)
+            {
+                parts.Add($"{written} 项系统凭据已写回（重启 DeskBox 生效）");
+            }
+
+            parts.AddRange(failed);
+            return parts.Count == 0 ? string.Empty : "\n" + string.Join("；", parts);
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
         }
     }
 

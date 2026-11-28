@@ -364,7 +364,7 @@
                     <TextBlock Text="本机档案与密钥" Style="{StaticResource SettingTitleTextStyle}" VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource SettingDescriptionTextStyle}" TextWrapping="Wrap"
-                           Text="把「这台机器是哪台」和 DeepSeek 密钥备份到坚果云，重装系统后输同一个口令就能取回。只备份档案与密钥，不备份资料库里的文件。" />
+                           Text="把「这台机器是哪台」、DeepSeek 密钥和坚果云等系统凭据一起加密备份到坚果云，重装系统后输同一个口令就能取回。只备份档案与密钥，不备份资料库里的文件。" />
 
                 <Grid ColumnSpacing="16" RowSpacing="10">
                     <Grid.ColumnDefinitions>

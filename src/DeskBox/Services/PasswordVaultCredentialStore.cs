@@ -32,7 +32,21 @@ internal sealed class PasswordVaultCredentialStore : ICredentialStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(secret);
-        new PasswordVault().Add(new PasswordCredential(Resource, key, secret));
+
+        // PasswordVault.Add 在「同 resource + key 已存在」时抛 COMException，
+        // 所以覆盖写必须先删再加（恢复备份、改密码都会走到这里）。
+        var vault = new PasswordVault();
+        try
+        {
+            vault.Remove(new PasswordCredential(Resource, key, string.Empty));
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException ||
+                                     ex is System.IO.FileNotFoundException)
+        {
+            // 不存在就是无所谓，继续 Add。
+        }
+
+        vault.Add(new PasswordCredential(Resource, key, secret));
         return Task.CompletedTask;
     }
 
