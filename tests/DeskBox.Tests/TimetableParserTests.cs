@@ -23,8 +23,8 @@ public sealed class TimetableParserTests
             new List<string> { "", "1", "2", "3", "1", "2", "3", "1", "2", "3" },
             new List<string> { "初三1", "语文", "数学", "英语", "物理", "化学", "历史", "地理 黎科", "体育", "数学" },
             new List<string> { "", "郑甲棉", "潘荣波", "文柳", "卢荣飞", "张军连", "莫培英", "电脑 白少锋", "苏强", "潘荣波" },
-            new List<string> { "初三2", "数学", "语文", "英语", "化学", "物理", "历史", "生物", "地理", "体育" },
-            new List<string> { "", "潘荣波", "郑甲棉", "文柳", "张军连", "卢荣飞", "莫培英", "李舒诗", "黎科", "苏强" }
+            new List<string> { "初三2", "数学", "数学", "英语", "化学", "物理", "历史", "生物", "地理", "体育" },
+            new List<string> { "", "张三", "潘荣波", "王五", "张军连", "卢荣飞", "赵六", "李舒诗", "黎科", "苏强" }
         };
         return grid;
     }
@@ -52,9 +52,9 @@ public sealed class TimetableParserTests
         TimetableParseResult result = TimetableGridParser.Parse(BuildWideGrid());
 
         TimetableClass first = result.Document.Classes.Single(item => item.Name == "初三1");
-        TimetableCell wednesdayThird = Assert.IsType<TimetableCell>(first.CellAt(2, 3));
-        Assert.Equal("地理", wednesdayThird.Subject);
-        Assert.Equal("黎科", wednesdayThird.Teacher);
+        TimetableCell wednesdayFirst = Assert.IsType<TimetableCell>(first.CellAt(2, 1));
+        Assert.Equal("地理", wednesdayFirst.Subject);
+        Assert.Equal("黎科", wednesdayFirst.Teacher);
         Assert.Contains(result.Document.Issues, issue => issue.Kind == TimetableIssue.KindMisaligned);
         Assert.Equal(1, result.Report.MisalignedCount);
     }

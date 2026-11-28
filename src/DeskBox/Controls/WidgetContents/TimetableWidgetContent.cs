@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using DeskBox.Models;
+using DeskBox.Services;
 using DeskBox.Services.Timetable;
 using DeskBox.ViewModels;
 using Microsoft.UI.Xaml;
@@ -39,6 +40,7 @@ public sealed class TimetableWidgetContent : UserControl
     public TimetableWidgetContent(TimetableWidgetViewModel viewModel)
     {
         _viewModel = viewModel;
+        _viewModel.ReminderPresenter = ShowReminder;
         Content = BuildRoot();
         _viewModel.ContentChanged += ViewModel_ContentChanged;
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -58,6 +60,30 @@ public sealed class TimetableWidgetContent : UserControl
         _built = true;
         await _viewModel.InitializeAsync();
         Rebuild();
+    }
+
+    /// <summary>
+    /// 系统通知出口。放在视图层（Controls）是因为边界契约只允许这里
+    /// 触达应用级服务；视图模型只负责判定「该不该提醒」。
+    /// </summary>
+    private static bool ShowReminder(TimetableReminderCandidate candidate)
+    {
+        NativeAppNotificationService? service = (App.Current as App)?.NativeNotificationService;
+        if (service is null)
+        {
+            return false;
+        }
+
+        (string title, string message, IReadOnlyDictionary<string, string> arguments) =
+            TimetableWidgetViewModel.DescribeReminder(candidate);
+
+        return service.TryShow(
+            title,
+            message,
+            arguments,
+            actions: null,
+            comboBoxes: null,
+            options: new NativeAppNotificationOptions(Tag: "timetable", Group: "timetable"));
     }
 
     private void ViewModel_ContentChanged(object? sender, EventArgs e)

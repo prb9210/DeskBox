@@ -52,6 +52,7 @@ public sealed class WidgetContentFactoryTests
             WidgetKind.Weather,
             WidgetKind.Tags,
             WidgetKind.SystemMonitor,
+            WidgetKind.Timetable,
             WidgetKind.Search,
             WidgetKind.Glance
         ], descriptors.Select(descriptor => descriptor.WidgetKind));
@@ -121,6 +122,7 @@ public sealed class WidgetContentFactoryTests
             WidgetKind.Todo,
             WidgetKind.Music,
             WidgetKind.Weather,
+            WidgetKind.Timetable,
             WidgetKind.Search,
             WidgetKind.Glance
         ], descriptors.Select(descriptor => descriptor.WidgetKind));

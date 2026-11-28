@@ -22,6 +22,7 @@ public sealed class FeatureWidgetKindContractTests
                 WidgetKind.Todo,
                 WidgetKind.Music,
                 WidgetKind.Weather,
+                WidgetKind.Timetable,
                 WidgetKind.Search,
                 WidgetKind.Glance
             },

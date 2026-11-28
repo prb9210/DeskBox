@@ -50,6 +50,13 @@ public sealed class TimetableWidgetViewModel : INotifyPropertyChanged, IDisposab
     /// <summary>视图监听它重画网格（切班、导入、跨节次都要重画）。</summary>
     public event EventHandler? ContentChanged;
 
+    /// <summary>
+    /// 发提醒的出口。视图（Controls 层）实现它并接系统通知；
+    /// 视图模型本身不碰应用全局单例 —— 仓库的边界契约禁止 ViewModels 直接
+    /// 摸全局业务对象，依赖一律注入。
+    /// </summary>
+    public Func<TimetableReminderCandidate, bool>? ReminderPresenter { get; set; }
+
     public TimetableDocument Document => _document;
 
     public TimetableLocalSettings Settings => _settings;
@@ -286,7 +293,7 @@ public sealed class TimetableWidgetViewModel : INotifyPropertyChanged, IDisposab
         }
 
         _notified.Add(candidate.Key);
-        bool shown = ShowToast(candidate);
+        bool shown = ReminderPresenter?.Invoke(candidate) ?? false;
         if (!shown)
         {
             StatusText = "系统通知不可用，只在格子里提示下一节。";
@@ -297,35 +304,18 @@ public sealed class TimetableWidgetViewModel : INotifyPropertyChanged, IDisposab
         App.Log("[Timetable] reminder fired key=" + candidate.Key + " shown=" + shown);
     }
 
-    private bool ShowToast(TimetableReminderCandidate candidate)
+    /// <summary>给视图用的提醒文案（标题 + 正文），避免两处各拼一套。</summary>
+    public static (string Title, string Message, IReadOnlyDictionary<string, string> Arguments) DescribeReminder(
+        TimetableReminderCandidate candidate)
     {
-        try
+        Dictionary<string, string> arguments = new(StringComparer.Ordinal)
         {
-            NativeAppNotificationService? service = (App.Current as App)?.NativeNotificationService;
-            if (service is null)
-            {
-                return false;
-            }
+            ["kind"] = "timetable",
+            ["classId"] = candidate.Class.Id,
+            ["period"] = candidate.Period.Index.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
 
-            return service.TryShow(
-                candidate.Title,
-                candidate.Message,
-                new Dictionary<string, string>
-                {
-                    ["kind"] = "timetable",
-                    ["classId"] = candidate.Class.Id,
-                    ["day"] = candidate.Cell.Day.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    ["period"] = candidate.Period.Index.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                },
-                actions: null,
-                comboBoxes: null,
-                options: new NativeAppNotificationOptions(Tag: "timetable", Group: "timetable"));
-        }
-        catch (Exception ex)
-        {
-            App.Log("[Timetable] toast failed: " + ex.Message);
-            return false;
-        }
+        return (candidate.Title, candidate.Message, arguments);
     }
 
     private void RefreshNextLesson()
