@@ -932,6 +932,19 @@ public sealed partial class WidgetDrawerWindow : Window
                 panel.Children.Add(new TextBlock { Text = "备忘 " + notes + " 条", FontSize = 12 });
             }
 
+            // 提示与错误分开：撤销、学到规则这些是正常结果，不该用红色喊人。
+            if (status is { Reachable: true } && !string.IsNullOrWhiteSpace(status.Hint))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = status.Hint,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromArgb(200, 90, 120, 160)),
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 260
+                });
+            }
+
             if (status is { Reachable: true } && !string.IsNullOrWhiteSpace(status.LastError))
             {
                 panel.Children.Add(new TextBlock

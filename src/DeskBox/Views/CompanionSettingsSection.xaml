@@ -54,6 +54,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="当前动作" />
@@ -68,8 +69,12 @@
                     <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近错误" />
                     <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ErrorValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="AI 分类" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" x:Name="AiValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
+                    <!-- 提示不是错误：撤销、学到规则、拖回桌面都是正常结果 -->
+                    <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="最近提示" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" x:Name="HintValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SettingDescriptionTextStyle}" Text="AI 分类" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" x:Name="AiValue" Style="{StaticResource SettingValueTextStyle}" Text="-" TextWrapping="Wrap" />
                 </Grid>
             </StackPanel>
         </Border>

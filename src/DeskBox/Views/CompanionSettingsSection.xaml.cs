@@ -179,6 +179,7 @@ public sealed partial class CompanionSettingsSection : UserControl
                 ? Or(status.LastApply) + " · " + status.LastApplyCount + " 个"
                 : Or(status.LastApply);
             ErrorValue.Text = Or(status.LastError);
+            HintValue.Text = Or(status.Hint);
             AiValue.Text = status.AiEnabled
                 ? status.AiModel + " · 调用 " + status.AiCalls + " 次"
                 : "未启用（不影响规则整理）";
@@ -1597,6 +1598,27 @@ public sealed partial class CompanionSettingsSection : UserControl
 
     // -------------------------------------------------------------- pending
 
+    // 待归类里最常见的是照片：一天拍几十上百张，全都没语境。逐条点不现实，
+    // 上千行「下拉框 + 按钮」也会让设置页卡死。所以按引擎给的批次分组：
+    // 同一批给一个「整批归位」，超过 8 个的批不再逐条列出。
+    private const int PendingRowsPerBatch = 8;
+    private const int PendingRowCap = 160;
+
+    private sealed class PendingBatch
+    {
+        public PendingBatch(string key, string label, string suggestId)
+        {
+            Key = key;
+            Label = label;
+            SuggestId = suggestId;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public string SuggestId { get; }
+        public int Count { get; set; }
+    }
+
     private async Task RefreshPendingAsync()
     {
         await FillListAsync(PendingList, "/api/pending", root =>
@@ -1607,8 +1629,80 @@ public sealed partial class CompanionSettingsSection : UserControl
                 return rows;
             }
 
+            // 先聚合批次：batch 由引擎算（photo:2026-10-15 / suggest:05.02），
+            // 面板不重复实现「哪些算一批」，两边算不一致会让按钮搬错文件。
+            var order = new List<string>();
+            var batches = new Dictionary<string, PendingBatch>();
             foreach (JsonElement item in items.EnumerateArray())
             {
+                string key = Str(item, "batch");
+                if (string.IsNullOrEmpty(key))
+                {
+                    continue;
+                }
+
+                if (!batches.TryGetValue(key, out PendingBatch? group))
+                {
+                    group = new PendingBatch(key, Str(item, "batch_label"), Str(item, "suggest_id"));
+                    batches[key] = group;
+                    order.Add(key);
+                }
+
+                group.Count++;
+            }
+
+            // 大批在前：先清 300 张照片的那一批，剩下的零碎心里有数就行。
+            order.Sort((a, b) => batches[b].Count.CompareTo(batches[a].Count));
+
+            foreach (string key in order)
+            {
+                PendingBatch group = batches[key];
+                ComboBox picker = BuildCategoryPicker(group.SuggestId);
+                string label = string.IsNullOrEmpty(group.Label) ? "这一批" : group.Label;
+                var header = new RowModel
+                {
+                    IsHeader = true,
+                    Title = label + " · " + group.Count + " 个",
+                    Detail = string.IsNullOrEmpty(group.SuggestId)
+                        ? "选一个分类，这一批一起归位"
+                        : "默认按建议目录归位，也可以改"
+                };
+                header.Extra = picker;
+                string batchKey = group.Key;
+                header.Buttons.Add(("整批归位", async () =>
+                {
+                    string? targetId = CategoryIdAt(picker);
+                    if (targetId is null)
+                    {
+                        return;
+                    }
+
+                    await CompanionClient.PostJsonAsync("/api/pending/apply", PendingBatchJson(batchKey, targetId));
+                    await RefreshPendingAsync();
+                }));
+                rows.Add(header);
+            }
+
+            int rendered = 0;
+            int folded = 0;
+            int overflow = 0;
+            foreach (JsonElement item in items.EnumerateArray())
+            {
+                string key = Str(item, "batch");
+                if (!string.IsNullOrEmpty(key)
+                    && batches.TryGetValue(key, out PendingBatch? group)
+                    && group.Count > PendingRowsPerBatch)
+                {
+                    folded++; // 已折进整批按钮，不再逐条列
+                    continue;
+                }
+
+                if (rendered >= PendingRowCap)
+                {
+                    overflow++;
+                    continue;
+                }
+
                 string name = Str(item, "name");
                 string suggestId = Str(item, "suggest_id");
                 string suggestDir = Str(item, "suggest_dir");
@@ -1639,6 +1733,24 @@ public sealed partial class CompanionSettingsSection : UserControl
                 }));
 
                 rows.Add(row);
+                rendered++;
+            }
+
+            if (folded > 0 || overflow > 0)
+            {
+                var tail = new StringBuilder();
+                if (folded > 0)
+                {
+                    tail.Append("另有 ").Append(folded).Append(" 个已折进上面的整批按钮");
+                }
+
+                if (overflow > 0)
+                {
+                    tail.Append(tail.Length > 0 ? "；" : string.Empty)
+                        .Append(overflow).Append(" 个暂未逐条列出，先处理整批再刷新");
+                }
+
+                rows.Add(new RowModel { Title = "…还有更多", Detail = tail.ToString() });
             }
 
             return rows;
@@ -1762,6 +1874,9 @@ public sealed partial class CompanionSettingsSection : UserControl
 
         /// <summary>Optional control (the category picker) shown above the buttons.</summary>
         public FrameworkElement? Extra { get; set; }
+
+        /// <summary>批次表头：加一层浅底色，和逐条的行区分开。</summary>
+        public bool IsHeader { get; init; }
     }
 
     private async Task FillListAsync(
@@ -1848,6 +1963,18 @@ public sealed partial class CompanionSettingsSection : UserControl
                 grid.Children.Add(side);
             }
 
+            if (row.IsHeader)
+            {
+                host.Children.Add(new Border
+                {
+                    Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(16, 90, 120, 160)),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(10, 6, 10, 6),
+                    Child = grid
+                });
+                continue;
+            }
+
             host.Children.Add(grid);
         }
     }
@@ -1893,6 +2020,20 @@ public sealed partial class CompanionSettingsSection : UserControl
             }
 
             writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string PendingBatchJson(string batch, string pathId)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("batch", batch);
+            writer.WriteString("path_id", pathId);
             writer.WriteEndObject();
         }
 

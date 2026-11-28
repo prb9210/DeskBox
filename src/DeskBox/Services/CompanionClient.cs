@@ -28,6 +28,9 @@ public sealed class CompanionStatus
     public string LastSync { get; init; } = string.Empty;
     public string LastSyncError { get; init; } = string.Empty;
     public string LastError { get; init; } = string.Empty;
+
+    /// <summary>引擎报告的正常结果（撤销、学到规则、拖回桌面…），不是错误。</summary>
+    public string Hint { get; init; } = string.Empty;
     public string SyncNote { get; init; } = string.Empty;
     public string TrashDir { get; init; } = string.Empty;
     public string AiModel { get; init; } = string.Empty;
@@ -82,6 +85,7 @@ public static class CompanionClient
                 LastSync = FormatTime(GetString(root, "last_sync")),
                 LastSyncError = GetString(root, "last_sync_error"),
                 LastError = GetString(root, "last_error"),
+                Hint = GetString(root, "hint"),
                 SyncNote = GetString(root, "sync_note"),
                 TrashDir = GetString(root, "trash_dir"),
                 AiModel = GetString(root, "ai_model"),
