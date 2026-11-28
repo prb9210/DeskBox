@@ -109,6 +109,19 @@ public sealed class WidgetContentFactory
             ChromeCategory: WidgetChromeCategory.Display,
             DefaultChromeMode: WidgetChromeMode.Overlay),
         new(
+            WidgetKind.Timetable,
+            "课程表",
+            "\uE787",
+            WidgetContentStage.Implemented,
+            CanShowInCreateEntry: false,
+            WidgetContentAvailability.Available,
+            "WidgetContent.Timetable.StatusLabel",
+            "WidgetContent.Timetable.StatusDescription",
+            "Timetable.NewWidget",
+            HasSettingsPage: false,
+            IsFeatureWidget: true,
+            ChromeCategory: WidgetChromeCategory.Display),
+        new(
             WidgetKind.Search,
             "Search",
             "\uE721",
@@ -276,6 +289,7 @@ public sealed class WidgetContentFactory
             new MusicWidgetContentProvider(),
             new WeatherWidgetContentProvider(),
             new GlanceWidgetContentProvider(),
+            new TimetableWidgetContentProvider(),
             new SearchWidgetContentProvider(),
             new PlaceholderWidgetContentProvider(WidgetKind.Tags),
             new PlaceholderWidgetContentProvider(WidgetKind.SystemMonitor)

@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "إلغاء قفل الحجم",
   "Widget.Shell.Collapse": "طي القطعة",
   "Todo.Due.Custom.Time": "وقت مخصص",
-  "Todo.Detail.EditStep": "تحرير الخطوة"
+  "Todo.Detail.EditStep": "تحرير الخطوة",
+  "WidgetContent.Timetable.StatusLabel": "Implemented",
+  "WidgetContent.Timetable.StatusDescription": "Import a class timetable, pin it to the desktop, and get a heads-up before each lesson.",
+  "Timetable.NewWidget": "Add timetable",
+  "Timetable.Title": "Timetable",
+  "Widget.Settings.Timetable": "Timetable settings",
+  "WidgetTitleIcon.Label.Timetable": "Timetable"
 }

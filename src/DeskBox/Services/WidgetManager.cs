@@ -619,7 +619,12 @@ public sealed partial class WidgetManager
                 WidgetKind.Glance,
                 CreateOrShowGlanceWidgetsAsync,
                 SetGlanceFeatureWidgetEnabledAsync,
-                () => CloseLoadedFeatureWidgetWindows(WidgetKind.Glance))
+                () => CloseLoadedFeatureWidgetWindows(WidgetKind.Glance)),
+            new(
+                WidgetKind.Timetable,
+                async _ => await CreateSingletonContentFeatureWidgetAsync(WidgetKind.Timetable),
+                SetContentFeatureWidgetEnabledAsync,
+                () => HideAndCloseFeatureWidgetAsync(WidgetKind.Timetable))
         ];
 
         return handlers.ToDictionary(handler => handler.WidgetKind);

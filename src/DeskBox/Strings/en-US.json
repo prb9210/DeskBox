@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "Unlock size",
   "Widget.Shell.Collapse": "Collapse widget",
   "Todo.Due.Custom.Time": "Custom time",
-  "Todo.Detail.EditStep": "Edit step"
+  "Todo.Detail.EditStep": "Edit step",
+  "WidgetContent.Timetable.StatusLabel": "Implemented",
+  "WidgetContent.Timetable.StatusDescription": "Import a class timetable, pin it to the desktop, and get a heads-up before each lesson.",
+  "Timetable.NewWidget": "Add timetable",
+  "Timetable.Title": "Timetable",
+  "Widget.Settings.Timetable": "Timetable settings",
+  "WidgetTitleIcon.Label.Timetable": "Timetable"
 }

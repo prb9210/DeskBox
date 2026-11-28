@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "サイズのロック解除",
   "Widget.Shell.Collapse": "ウィジェットを折りたたむ",
   "Todo.Due.Custom.Time": "カスタム時刻",
-  "Todo.Detail.EditStep": "ステップを編集"
+  "Todo.Detail.EditStep": "ステップを編集",
+  "WidgetContent.Timetable.StatusLabel": "Implemented",
+  "WidgetContent.Timetable.StatusDescription": "Import a class timetable, pin it to the desktop, and get a heads-up before each lesson.",
+  "Timetable.NewWidget": "Add timetable",
+  "Timetable.Title": "Timetable",
+  "Widget.Settings.Timetable": "Timetable settings",
+  "WidgetTitleIcon.Label.Timetable": "Timetable"
 }

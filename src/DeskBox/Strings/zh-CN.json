@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "解锁尺寸",
   "Widget.Shell.Collapse": "收起格子",
   "Todo.Due.Custom.Time": "自定义时间",
-  "Todo.Detail.EditStep": "编辑步骤"
+  "Todo.Detail.EditStep": "编辑步骤",
+  "WidgetContent.Timetable.StatusLabel": "已实现",
+  "WidgetContent.Timetable.StatusDescription": "导入一张总课程表，桌面按班级显示本周/今日课表，并在上课前发系统通知。",
+  "Timetable.NewWidget": "添加课程表",
+  "Timetable.Title": "课程表",
+  "Widget.Settings.Timetable": "课程表设置",
+  "WidgetTitleIcon.Label.Timetable": "课程表"
 }

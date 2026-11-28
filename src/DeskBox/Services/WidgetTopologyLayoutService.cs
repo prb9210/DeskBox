@@ -1280,7 +1280,7 @@ internal sealed class WidgetTopologyLayoutService
     }
 
     private static bool IsFixedContentKind(WidgetKind kind) =>
-        kind is WidgetKind.Weather or WidgetKind.Music or WidgetKind.SystemMonitor or WidgetKind.Glance;
+        kind is WidgetKind.Weather or WidgetKind.Music or WidgetKind.SystemMonitor or WidgetKind.Glance or WidgetKind.Timetable;
 
     /// <summary>
     /// Upgrades a pre-elastic profile (spec D11): derives each entry's

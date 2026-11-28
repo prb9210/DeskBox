@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "解鎖尺寸",
   "Widget.Shell.Collapse": "收起小工具",
   "Todo.Due.Custom.Time": "自訂時間",
-  "Todo.Detail.EditStep": "編輯步驟"
+  "Todo.Detail.EditStep": "編輯步驟",
+  "WidgetContent.Timetable.StatusLabel": "已實現",
+  "WidgetContent.Timetable.StatusDescription": "匯入一張總課程表，桌面依班級顯示本週/今日課表，並在上課前發系統通知。",
+  "Timetable.NewWidget": "新增課程表",
+  "Timetable.Title": "課程表",
+  "Widget.Settings.Timetable": "課程表設定",
+  "WidgetTitleIcon.Label.Timetable": "課程表"
 }

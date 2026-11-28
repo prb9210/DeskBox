@@ -2991,5 +2991,11 @@
   "Widget.UnlockSize": "Größe entsperren",
   "Widget.Shell.Collapse": "Widget zusammenklappen",
   "Todo.Due.Custom.Time": "Benutzerdefinierte Uhrzeit",
-  "Todo.Detail.EditStep": "Schritt bearbeiten"
+  "Todo.Detail.EditStep": "Schritt bearbeiten",
+  "WidgetContent.Timetable.StatusLabel": "Implemented",
+  "WidgetContent.Timetable.StatusDescription": "Import a class timetable, pin it to the desktop, and get a heads-up before each lesson.",
+  "Timetable.NewWidget": "Add timetable",
+  "Timetable.Title": "Timetable",
+  "Widget.Settings.Timetable": "Timetable settings",
+  "WidgetTitleIcon.Label.Timetable": "Timetable"
 }

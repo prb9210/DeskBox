@@ -288,7 +288,10 @@ public enum WidgetKind
     Productivity,
 
     /// <summary>At-a-glance background, time and date widget.</summary>
-    Glance
+    Glance,
+
+    /// <summary>班级课程表：导入一次，桌面看本周/今日，并可做课前提醒。</summary>
+    Timetable
 }
 
 /// <summary>
