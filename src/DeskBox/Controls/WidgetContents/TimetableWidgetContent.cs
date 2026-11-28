@@ -21,7 +21,7 @@ namespace DeskBox.Controls.WidgetContents;
 /// 而切换班级、按时间高亮「现在」这一列/这节都是运行时算出来的，
 /// 直接在代码里重建更直白，也不受 XAML 编译期的类型限制。
 /// </summary>
-public sealed class TimetableWidgetContent : UserControl
+public sealed partial class TimetableWidgetContent : UserControl
 {
     private static readonly Color s_myClassTint = Color.FromArgb(0x2E, 0x2F, 0x6F, 0xD0);
     private static readonly Color s_todayTint = Color.FromArgb(0x18, 0xFF, 0xD4, 0x79);
