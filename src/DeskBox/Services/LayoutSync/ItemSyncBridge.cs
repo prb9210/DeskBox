@@ -367,6 +367,20 @@ internal static class ItemSyncBridge
                             changed = true;
                         }
                     }
+                    else
+                    {
+                        // 资料库换了位置：旧绝对路径不在了，按附件 Id 去新库认领。
+                        string? repaired = AttachmentMirror.RepairIfMissing(
+                            path,
+                            LibraryRoot,
+                            attachment["id"]?.GetValue<string>() ?? string.Empty,
+                            attachment["displayName"]?.GetValue<string>());
+                        if (repaired is not null && !string.Equals(repaired, path, StringComparison.Ordinal))
+                        {
+                            attachment["filePath"] = repaired;
+                            changed = true;
+                        }
+                    }
                 }
             }
         }

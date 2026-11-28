@@ -159,4 +159,47 @@ public sealed class AttachmentMirrorTests
             }
         }
     }
+
+    /// <summary>资料库换盘：旧绝对路径不在了，按附件 Id 回新库认领。</summary>
+    [Fact]
+    public void RepairIfMissingRewritesToNewLibraryRoot()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "deskbox-repair-" + Guid.NewGuid().ToString("N"));
+        string sourceDir = Path.Combine(root, "widgets", "w1");
+        string oldLibrary = Path.Combine(root, "old-library");
+        string newLibrary = Path.Combine(root, "new-library");
+        Directory.CreateDirectory(sourceDir);
+        string source = Path.Combine(sourceDir, "卷子.jpg");
+        File.WriteAllText(source, "x");
+
+        try
+        {
+            // 先进旧库，再把库搬到别处（同步目录换盘）。
+            string? logical = AttachmentMirror.TryMirror(source, oldLibrary, "att9", "卷子.jpg");
+            Assert.NotNull(logical);
+            string oldPath = AttachmentMirror.Resolve(logical!, oldLibrary);
+            Directory.CreateDirectory(Path.GetDirectoryName(newLibrary)!);
+            Directory.Move(oldLibrary, newLibrary);
+            Assert.False(File.Exists(oldPath));
+
+            string? repaired = AttachmentMirror.RepairIfMissing(oldPath, newLibrary, "att9", "卷子.jpg");
+            Assert.NotNull(repaired);
+            Assert.True(File.Exists(repaired));
+            Assert.Equal(
+                Path.Combine(newLibrary, "_deskbox", "attachments", "att9", "卷子.jpg"),
+                repaired);
+
+            // 文件还在原处时不该乱改。
+            Assert.Null(AttachmentMirror.RepairIfMissing(source, newLibrary, "att9", "卷子.jpg"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
 }

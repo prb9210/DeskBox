@@ -134,6 +134,48 @@ public static class AttachmentMirror
         return full.Substring(root.Length).Replace('\\', '/');
     }
 
+    /// <summary>
+    /// 资料库换了盘符/同步目录后，本机 JSON 里已经解析成旧绝对路径的附件就断了。
+    /// 按「附件 Id + 文件名」到当前库的 <c>_deskbox\attachments\</c> 下找回来；
+    /// 找得到就返回新路径，找不到返回 null（保持原样，别把路径改坏）。
+    /// </summary>
+    public static string? RepairIfMissing(
+        string filePath,
+        string libraryRoot,
+        string attachmentId,
+        string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) ||
+            string.IsNullOrWhiteSpace(libraryRoot) ||
+            string.IsNullOrWhiteSpace(attachmentId) ||
+            IsLogical(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                return null;
+            }
+
+            string candidate = Path.Combine(
+                libraryRoot,
+                SharedDirName,
+                AttachmentsDirName,
+                SafeSegment(attachmentId),
+                SafeFileName(displayName, filePath));
+
+            return File.Exists(candidate) ? candidate : null;
+        }
+        catch (Exception ex)
+        {
+            DeskBox.App.Log("[AttachmentMirror] 修复路径失败 " + filePath + ": " + ex.Message);
+            return null;
+        }
+    }
+
     private static string SafeSegment(string value)
     {
         string result = value.Trim();
