@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
+using DeskBox.Platform;
 
 namespace DeskBox.Services.LayoutSync;
 
@@ -288,11 +289,89 @@ internal static class ItemSyncBridge
             remote[name] = rebuilt;
         }
 
+        if (LocalizeAttachments(local, toLogical: false))
+        {
+            localChanged = true;
+        }
+
+        if (LocalizeAttachments(remote, toLogical: true))
+        {
+            remoteChanged = true;
+        }
+
         return new MergeResult(
             local.ToJsonString(),
             remote.ToJsonString(),
             localChanged,
             remoteChanged);
+    }
+
+    /// <summary>
+    /// 附件路径搬运：镜像（remote）里写 <c>@{Library}\…</c> 逻辑路径，文件不在库里
+    /// 就复制进 <c>_deskbox\attachments\</c>；本机（local）里写回本机绝对路径。
+    ///
+    /// 默认存储模式是 linked（用户自己的外部文件），只搬 managed 等于没修，所以两种
+    /// 模式都搬。只复制、不移动原文件；已在库里的附件只转逻辑路径，不再复制一份。
+    ///
+    /// 返回是否改动了路径，调用方据此决定要不要落盘。
+    /// </summary>
+    private static bool LocalizeAttachments(JsonObject doc, bool toLogical)
+    {
+        bool changed = false;
+        foreach (string name in s_arrayNames)
+        {
+            if (doc[name] is not JsonArray items)
+            {
+                continue;
+            }
+
+            foreach (JsonNode? node in items)
+            {
+                if (node is not JsonObject item || item["attachments"] is not JsonArray attachments)
+                {
+                    continue;
+                }
+
+                foreach (JsonNode? entry in attachments)
+                {
+                    if (entry is not JsonObject attachment)
+                    {
+                        continue;
+                    }
+
+                    string? path = attachment["filePath"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    if (toLogical)
+                    {
+                        string? logical = AttachmentMirror.TryMirror(
+                            path,
+                            LibraryRoot,
+                            attachment["id"]?.GetValue<string>() ?? string.Empty,
+                            attachment["displayName"]?.GetValue<string>());
+                        if (logical is not null && !string.Equals(logical, path, StringComparison.Ordinal))
+                        {
+                            attachment["filePath"] = logical;
+                            changed = true;
+                        }
+                    }
+                    else if (AttachmentMirror.IsLogical(path))
+                    {
+                        string resolved = AttachmentMirror.Resolve(path, LibraryRoot);
+                        if (!string.Equals(resolved, path, StringComparison.Ordinal))
+                        {
+                            attachment["filePath"] = resolved;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return changed;
     }
 
     private static Dictionary<string, JsonNode?> Index(JsonArray array)
